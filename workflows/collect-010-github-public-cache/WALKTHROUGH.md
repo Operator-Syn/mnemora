@@ -126,6 +126,18 @@ Why this is a single node rather than a chain of one-node-per-repository: an ear
 "the first item" at several points, which meant a two-repository allowlist produced one file and
 reported success. A single loop over a list cannot skip an entry without also failing loudly.
 
+### Cold start
+
+A repository the database has never seen is the expensive case: there is nothing to compare
+against, so its whole history is fetched. Doing that for every repository in one run is a burst —
+and an interrupted burst leaves a database that looks finished but holds half the account.
+
+`COLLECT_010_MAX_NEW_PER_RUN` (default 12) caps it. Past the cap, a repository is written with
+`source_state = 'pending'` and no commit list: it exists, so the dashboard can say "not collected
+yet" instead of "empty"; it cannot be pruned, because only `complete` records prune; and the next
+run treats `pending` exactly like new. A 24-repository cold start completes in two runs, and each
+one is safe to kill.
+
 ## Step 5 — Pipe Batches: separate database records from the export
 
 Records go to the pipeline. The run-status item carries the two things the pipeline needs that are
