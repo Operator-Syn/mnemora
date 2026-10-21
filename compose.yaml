@@ -1,0 +1,146 @@
+name: mnemora-automation
+
+# Every workflow's .env, injected into the services that execute workflow code.
+# Kept as one anchored list: adding a workflow is one line here, not one edit per
+# service. Compose has no glob for env_file, so each path is named explicitly.
+x-workflow-env: &workflow_env
+  - path: ./workflows/collect-010-github-public-cache/.env
+    required: false
+
+services:
+  # One-shot: create the public/private namespaces inside the cache volume.
+  # Container processes run as uid 1000, so the directory must be owned by it.
+  cache-init:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:?Set N8N_VERSION in .env}
+    user: "0:0"
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - mkdir -p /data/public /data/private && chown -R 1000:1000 /data
+    volumes:
+      - collector_data:/data
+    networks:
+      - backend
+
+  postgres:
+    image: postgres:${POSTGRES_VERSION:?Set POSTGRES_VERSION in .env}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      # postgres 18+ stores data in a version-specific subdirectory, so the mount
+      # must be the parent. Mounting .../data makes 18 refuse to start.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+
+  redis:
+    image: redis:${REDIS_VERSION:?Set REDIS_VERSION in .env}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:?Set N8N_VERSION in .env}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      cache-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${N8N_HOST_PORT:-5680}:5678"
+    # Workflow settings, kept separate from the stack's root .env.
+    env_file: *workflow_env
+    environment: &n8n_environment
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Set N8N_ENCRYPTION_KEY in .env}
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_HEALTH_CHECK_ACTIVE: "true"
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+      TZ: ${GENERIC_TIMEZONE:-UTC}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      # This workflow writes megabytes of JSON per run. Persisting every successful
+      # execution's node data would grow the database forever for no benefit: the
+      # output is already on the cache volume. Keep failures, prune the rest.
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: ${EXECUTIONS_MAX_AGE_HOURS:-168}
+      # n8n advertises this URL in OAuth/webhook metadata; a wrong value breaks MCP and webhooks.
+      WEBHOOK_URL: ${N8N_PUBLIC_URL:?Set N8N_PUBLIC_URL in .env}
+      N8N_EDITOR_BASE_URL: ${N8N_PUBLIC_URL:?Set N8N_PUBLIC_URL in .env}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Read/Write Files is confined to an allowlist; the cache lives outside ~/.n8n.
+      N8N_RESTRICT_FILE_ACCESS_TO: /home/node/mnemora-data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5678/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - collector_data:/home/node/mnemora-data
+    networks:
+      - backend
+
+  worker:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:?Set N8N_VERSION in .env}
+    restart: unless-stopped
+    command: ["worker", "--concurrency=${QUEUE_WORKER_CONCURRENCY:-5}"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      n8n:
+        condition: service_started
+      cache-init:
+        condition: service_completed_successfully
+    env_file: *workflow_env
+    environment:
+      <<: *n8n_environment
+    volumes:
+      # Queue mode executes on the worker, so the collector cache must be mounted here too.
+      - collector_data:/home/node/mnemora-data
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  n8n_data:
+  collector_data:
+
+networks:
+  backend:
+    driver: bridge
