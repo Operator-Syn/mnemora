@@ -20,6 +20,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from workflow_files import load_expanded  # noqa: E402
 REF = re.compile(r"\$\(\s*['\"]([^'\"]+)['\"]\s*\)")
 
 # How many outputs each node type actually has. Only the shapes this repo uses need to be right;
@@ -53,7 +55,8 @@ def walk_strings(value):
 
 def check(path):
     problems = []
-    wf = json.loads(Path(path).read_text())
+    # The manifest holds @file: markers; the expressions live in the code/sql files it points at.
+    wf = load_expanded(Path(path))
     nodes = {n["name"]: n for n in wf.get("nodes", [])}
 
     # 0. an import upserts by id. A file without one is created as a NEW workflow every time,
