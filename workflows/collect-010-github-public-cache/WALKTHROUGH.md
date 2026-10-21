@@ -157,6 +157,17 @@ use Node's `fetch` or n8n's own HTTP helper.
 If this fails after three retries the run fails. A run that fetched data and never stored it must
 not report success.
 
+## Step 6b — Record Run: the run leaves a trace
+
+The last thing a run does in the pipeline is file its own report in `mnemora_runs`: how many
+repositories it fetched, skipped, deferred or failed; how many commits the database accepted, added
+or pruned; how many API calls it spent; and how long it took.
+
+The counts are read, not guessed — repository outcomes from the status item Collect produced, commit
+numbers summed from persist's answers — and a failure to file the report does not fail the run,
+because the data is already stored. The per-run `collector-status.json` still exists as an export,
+but it is overwritten every run; this table is the history.
+
 ## Step 7 — the export
 
 `To JSON File` turns each record into bytes, `Write Public Cache` saves it, filenames come from
