@@ -175,6 +175,9 @@ listing call when nothing moved, and writes a row to `mnemora_runs`.
 Successful executions are not retained by n8n in this stack (`EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`),
 so a run that behaved oddly leaves only its aggregate row. Two things fix that:
 
+- `mnemora_runs.trigger_mode` — `schedule`, `manual` or `production`: which trigger actually fired.
+  Necessary because n8n retains neither successful nor scheduled executions here, so without it a
+  scheduled run and an editor click are indistinguishable.
 - `mnemora_telemetry` — one row per repository per run: mode, state, pages fetched, commits,
   `duration_ms`, and the verbatim `source_error`. Written by `persist-010` from the collector's own
   report, in the same statement as the run row, so a run cannot appear without its detail.
