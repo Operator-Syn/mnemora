@@ -1,7 +1,8 @@
 # The collector reads its state from the database
 
-**Status:** implemented and demonstrated on 2026-10-21, except M5's overlap guard and AC-10's
-destructive cold-start run (see *Implementation results*).
+**Status:** implemented and demonstrated on 2026-10-21. Every acceptance condition passes except
+the overlap guard, which is deliberately not built and is documented as a known limitation
+rather than claimed as done.
 **Owner:** Yash. **Scope:** `collect-010-github-public-cache` only. `persist-010` is finished and verified.
 
 ## Why this exists
@@ -99,6 +100,10 @@ Exit: AC-6, AC-7, AC-11.
 **M5 — Hardening.** Read-only database role for the collector, execution timeout sized to a
 measured cold run, overlap guard so a schedule tick cannot start a second run mid-flight.
 Exit: AC-9, plus a measured timeout with headroom and a demonstrated rejection of a concurrent run.
+**Landed:** read-only role (`mnemora_reader`) and `executionTimeout: 900` against a 252 s cold run.
+**Not landed:** the overlap guard. Two concurrent runs would double the calls and interleave
+writes; the writes stay correct (idempotent, keyed by sha) but the calls are wasted. Recorded as
+a limitation in `docs/automation/workflows.md` rather than pretended away.
 
 **M6 — Documentation and honesty.** Update the walkthrough, the workflow README and the automation
 docs; correct the README status section.
@@ -213,9 +218,9 @@ condition is not proven, it says so.
 | AC-7 | **passing** | partial record → `commits_pruned: 0`; the same payload that previously deleted a row now deletes nothing. |
 | AC-8 | **passing** | persist unpublished → webhook 404, collector exit 1, `refreshed_at_utc` unchanged, 6,993 commits intact; after republishing, the next run succeeded in 7 s. |
 | AC-9 | **passing** | `mnemora_reader` reads 24 rows; `insert` → `permission denied for table mnemora_repositories`; `-d n8n` → `permission denied for database "n8n"`. |
-| AC-10 | **not demonstrated** | Requires dropping the product database; deliberately not run in this session. `scripts/backfill.sh` makes it recoverable, and the empty-cache run (AC-1) covers half the claim. |
+| AC-10 | **passing** | Product tables truncated, `public/` moved aside, run held a `pg_dump` safety net: 252 s later, **24 repositories / 6,993 commits** reproduced from GitHub alone, all 24 fetched in full. |
 | AC-11 | **passing** | planted `Operator-Syn/ghost-test` with one commit; run archived it (`absent from owner public listing`), kept the commit, and a second run changed nothing. |
-| AC-12 | **partial** | this document and `db/migrations` are current; `WALKTHROUGH.md`, the workflow `README.md` and `docs/automation/workflows.md` still describe the file-first design. |
+| AC-12 | **passing** | `WALKTHROUGH.md` rewritten around the nine-node shape; workflow `README.md` and `docs/automation/workflows.md` updated, including a deploy section stating that importing is not publishing. |
 | AC-13 | **passing** | see the criteria table: 7 s warm run with 24/24 `skipped`. |
 | AC-14 | **passing** | export observed writing after the connection fix (status file mtime advanced). |
 | AC-15 | **passing** | gate probe returned `commits_pruned: 0` for a skipped-style record; 6,993 rows intact. |
