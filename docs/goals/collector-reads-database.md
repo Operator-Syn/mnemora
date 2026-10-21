@@ -127,6 +127,10 @@ Exit: AC-12, and a final cold run from empty state recorded as the reference out
   next run that sees it. Migration `0002_archive_repositories`.
 - **D4 — `data_changed_at_utc` is owned by the persist workflow.** The collector stops sending a
   value that gets overwritten anyway. Single writer owns the derivation.
+- **D7 — Telemetry is per repository, and gated at the endpoint.** `mnemora_telemetry` holds one
+  row per repository per run; `debug-010-telemetry` serves it only with an `X-Mnemora-Token` header
+  and queries as the read-only role. A leaked token exposes run history, not the database and not
+  the ability to write.
 - **D6 — Cold start is bounded, not all-at-once.** `COLLECT_010_MAX_NEW_PER_RUN` (default 12)
   caps how many never-collected repositories one run fetches; the rest become `pending` rows.
   The tradeoff is honest: a cold start takes more than one run, but each run is short enough to
@@ -230,6 +234,8 @@ valid, it is marked superseded with the reason.
 |---|---|---|---|---|
 | **AC-13** | 2026-10-21 | Timestamps from Postgres (`2026-10-18 01:09:49+00`) never equal GitHub's ISO strings (`2026-10-18T01:09:49Z`), so `reuse()` was always false and every "skipped" repository was silently re-fetched in full — 24 repositories, ~95 calls per run. | A warm run with unchanged upstream must report `skipped` for every repository and finish in seconds, not minutes. | passing (7 s, 24/24 skipped) |
 | **AC-14** | 2026-10-21 | Wiring a second branch to `main[1]` of a Code node orphaned the cache export: Code nodes have one output, so the export silently stopped running while the run reported success. | After any connectivity change, the cache export must be observed to run (status file mtime advances), not assumed. | passing |
+| **AC-21** | 2026-10-21 | A run that behaved oddly left only an aggregate row: successful executions are not retained by n8n here, so nothing said *which* repository was slow, capped or failing. | Each run must record a per-repository outcome, and reading it must require authorization. | passing (24 rows/run; endpoint 403 without token, 200 with) |
+| **AC-22** | 2026-10-21 | A `workflow.json` without a top-level `id` is **created as a new workflow** on every import. Editing the telemetry workflow produced a duplicate, and I published the old one — the fix appeared to do nothing while the database looked correct. | Every workflow file must carry its id, and the import must refuse one that does not. | passing (checker fails a file with no id) |
 | **AC-20** | 2026-10-21 | Publishing is what arms a trigger; `active` in the database is not proof the scheduler registered anything. A schedule that never fires looks exactly like one that works, until the day you need it. | A published schedule must be observed firing, and the production interval must be verified afterwards. | passing (two `mode=trigger` executions 60 s apart, then 6 h restored and confirmed silent) |
 | **AC-19** | 2026-10-21 | Run history lived only in a file that each run overwrote, so no question about past runs could be answered from the product database. | Every run must leave one queryable row with its own outcomes and cost, and rows must not overwrite each other. | passing (two consecutive runs produced two distinct rows) |
 | **AC-17** | 2026-10-21 | A first run against an empty database fetched every repository in one burst (~95 calls, 252 s). Interrupted halfway, the database looked identical to a completed run with fewer repositories, and nothing recorded what was still owed. | A cold start must be bounded per run, resumable, and must leave uncollected repositories visible as such — never prunable, never indistinguishable from empty. | passing (2 runs: 12 collected + 12 pending, then the rest) |
@@ -254,6 +260,8 @@ condition is not proven, it says so.
 | AC-8 | **passing** | persist unpublished → webhook 404, collector exit 1, `refreshed_at_utc` unchanged, 6,993 commits intact; after republishing, the next run succeeded in 7 s. |
 | AC-9 | **passing** | `mnemora_reader` reads 24 rows; `insert` → `permission denied for table mnemora_repositories`; `-d n8n` → `permission denied for database "n8n"`. |
 | AC-10 | **passing** | Product tables truncated, `public/` moved aside, run held a `pg_dump` safety net: 252 s later, **24 repositories / 6,993 commits** reproduced from GitHub alone, all 24 fetched in full. |
+| AC-21 | **passing** | Idle run recorded 24 telemetry rows (`duration_ms` 0, nothing fetched); a forced full run recorded real timings — slowest `operator-synaciel` 36,106 ms. `GET /webhook/mnemora-telemetry`: 403 with no token, 403 with a wrong token, 200 with the right one. Query runs as `mnemora_reader` (SELECT only). |
+| AC-22 | **passing** | Caught live: two `debug-010-telemetry` rows, one holding the fix and inactive. The intended workflow was given its id, re-imported, republished, and the duplicate archived. `check-workflow-refs.py` now refuses any `workflow.json` without an id. |
 | AC-20 | **passing** | Interval temporarily set to one minute and published: executions 935 and 963 fired at 14:17:30 and 14:18:30, both `trigger`, both `success`, each writing a run row (`24 skipped`, `api_calls=1`). Restored to six hours, republished, and 75 s later zero executions had occurred. |
 | AC-19 | **passing** | Two consecutive warm runs → two rows (`run_id` 793, 821), 24 skipped each, 1 API call each. A real cold start → `fetched=12 pending=12`, then `fetched=12 skipped=12 pending=0`, with commit counts 2,278 then 4,715 and API calls 45 then 68. |
 | AC-17 | **passing** | Truncated both tables, cap 12: run 1 → 24 rows, 2,278 commits, 12 `pending`, 68 s; run 2 → 6,993 commits, 0 `pending`, 116 s. Nothing was pruned by a `pending` record. |
