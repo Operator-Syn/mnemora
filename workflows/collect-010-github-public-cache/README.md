@@ -18,7 +18,7 @@ dashboard reads it instead of talking to GitHub itself.
 
 ## Nodes
 
-`Manual Run` / `Every 6 Hours` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Pipe Batches` → `Save to Pipe` → `Release Run Lock`
+`Manual Run` / `Every 6 Hours` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Pipe Batches` → `Save to Pipe` → `Record Run` → `Release Run Lock`
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Collect` → `To JSON File` → `Write Public Cache`
 
 `Build Plan` reads configuration; `Collect` does the work in one pass. They are separate
@@ -72,6 +72,24 @@ full list" — treating them as authoritative once deleted all 6,993 commits.
 **History rewrites self-correct:** a repository re-fetched in full simply does not contain the
 rewritten-away commits, so prune removes them. Explicit head-comparison is no longer needed.
 
+
+## Run history
+
+Every run writes one row to `mnemora_runs` — repositories fetched, skipped, deferred, failed and
+archived, commits the pipe reported back, and API calls spent. The counting is not estimated: the
+repository outcomes come from the run's own status item, and the commit numbers are summed from
+what persist answered for each record.
+
+This exists because the per-run `collector-status.json` was overwritten every time, so yesterday's
+run left nothing behind. `Record Run` is non-fatal: a run that stored its data must not fail
+because filing the report did.
+
+```sql
+-- what did the last few runs cost, and did they do anything?
+select run_id, status, repositories_fetched, repositories_skipped,
+       repositories_pending, commits_seen, api_calls, finished_at_utc
+from mnemora_runs order by finished_at_utc desc limit 10;
+```
 
 ## Cold start
 
