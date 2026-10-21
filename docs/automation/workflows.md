@@ -122,7 +122,7 @@ The main instance creates executions; **workers run them**. Anything a workflow 
 
 ## The implemented workflow
 
-`workflows/collect-010-github-public-cache/workflow.json` — every 6 hours, plus on-demand:
+`workflows/collect-010-github-public-cache/workflow.json` — hourly, plus on-demand:
 
 1. **Build Plan** reads `COLLECT_010_OWNERS`, `COLLECT_010_WINDOW_DAYS`, the optional token, and the fork/archived flags from the workflow's own `.env`.
 2. **Read State** asks Postgres what is already collected, through the read-only `mnemora_reader` role: `repository_id`, `full_name`, `pushed_at_utc`, `commit_count`, `source_state`, `archived_at_utc` and languages per repository. This replaced the two file-reading nodes. The cache files are no longer an input, so deleting them changes nothing about what a run decides. An unreachable database fails the run rather than being read as "nothing collected".
@@ -162,7 +162,7 @@ Two honest labels are deliberate and should not be "fixed":
 
 - **Published and active** (2026-10-21). The six-hour schedule fires on its own: verified by
 temporarily setting the interval to one minute, watching two `mode=trigger` executions fire exactly
-60 s apart, then restoring six hours — after which no further ticks occurred. Each tick costs one
+60 s apart, then restoring the real interval — after which no further ticks occurred. Each tick costs one
 listing call when nothing moved, and writes a row to `mnemora_runs`.
 - **Nothing prunes or archives yet at the workflow level** — that is `persist-010`'s job, and it is implemented: prune only on complete records, archive vanished repositories rather than deleting them.
 - Overlap is guarded by a database lease: a second run fails within seconds, naming the holder, instead of crawling twice. `executionTimeout` is 900 s against a measured 252 s cold run.
@@ -193,6 +193,31 @@ curl -s -H "X-Mnemora-Token: $TOKEN" http://127.0.0.1:5680/webhook/mnemora-telem
 
 What to look at first when something is wrong: `health.last_run_age_seconds` (is it running at all?),
 `health.not_complete` (is anything stuck?), then `recent_issues` for the verbatim error.
+
+## Recording failures, not just successes
+
+A run that fails used to leave **nothing** in `mnemora_runs`: n8n does not retain successful
+executions here, and the run row is written by the last node — which a failed run never reaches. The
+table therefore showed only the runs that went well, and "was it successful?" could only be answered
+by the absence of a row, which is the same signal as "the schedule is not firing at all".
+
+`notify-010-run-failures` is attached as the collector's `errorWorkflow`. On failure it writes a row
+with `status = 'error'` and the failing node named:
+
+```
+failed in node "Acquire Run Lock": Request failed with status code 404
+```
+
+Two things about it are load-bearing:
+
+- **It writes to Postgres directly**, not through the write pipe. The first version posted to the
+  pipe and recorded nothing the moment the pipe was down — the exact failure it exists to report.
+- **It must be published.** n8n refuses to invoke an unpublished error workflow; the log says
+  `Workflow "<id>" is not active and cannot be executed` and the failure goes unrecorded. This is the
+  one workflow whose silence is indistinguishable from "nothing failed".
+
+Counts in an error row are `null`, never `0`: the run died before it knew them, and zero would read
+as "looked at nothing and found nothing".
 
 ## Importing a workflow from a URL
 
