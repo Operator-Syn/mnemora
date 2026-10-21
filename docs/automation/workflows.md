@@ -161,6 +161,31 @@ curl -s -H "X-Mnemora-Token: $TOKEN" http://127.0.0.1:5680/webhook/mnemora-telem
 What to look at first when something is wrong: `health.last_run_age_seconds` (is it running at all?),
 `health.not_complete` (is anything stuck?), then `recent_issues` for the verbatim error.
 
+## Importing a workflow from a URL
+
+The editor's "Import from URL" is removed in n8n 3.0. The capability lives in the script instead,
+with a check the menu never had:
+
+```sh
+./scripts/workflows.sh import-url <url> [--save <dir>] [--yes] [--print-url]
+```
+
+A workflow is code that runs with this instance's environment and credentials, so the import prints
+what the file would be able to do before it lands:
+
+```
+This workflow (some-workflow, 2 nodes) would be able to:
+  - node 'Shell' runs shell commands in the container
+  - reads environment variables (every variable in the container is visible)
+  - references credential 'GitHub' (it will need to exist here)
+
+Refusing to import without --yes. Verify the source before granting this.
+```
+
+`--save` writes the file into `workflows/<dir>/` with a README recording the source URL, the import
+time and the n8n id. The id matters: without it, every import creates a *new* workflow, which is how
+an edit can silently land on a duplicate while the real one keeps running the old version.
+
 ## Deploying a workflow change
 
 Importing a file is not deploying it. n8n 2.x separates a **draft** from a **published version**:
