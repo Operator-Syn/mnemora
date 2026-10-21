@@ -216,6 +216,12 @@ Two things about it are load-bearing:
   `Workflow "<id>" is not active and cannot be executed` and the failure goes unrecorded. This is the
   one workflow whose silence is indistinguishable from "nothing failed".
 
+It also **releases the failed run's lease**. A run that dies never reaches `Release Run Lock`, so its
+lease survives to the TTL and every tick in the window is refused with `another run holds the lease`.
+One transient DNS failure (`EAI_AGAIN`) therefore produced three failures: the crash, then two
+refusals. The delete is scoped to that execution's `run_id`, so a lease held by a *live* run is never
+cleared.
+
 Counts in an error row are `null`, never `0`: the run died before it knew them, and zero would read
 as "looked at nothing and found nothing".
 
