@@ -3,9 +3,13 @@
 #
 # Layout: one directory per workflow.
 #   workflows/<name>/
-#     workflow.json     definition (source of truth)
+#     workflow.json     definition (source of truth); code and SQL are @file: markers
+#     code/*.js         Code node bodies, as real files
+#     sql/*.sql         Postgres queries, as real files
 #     .env.example      committed template
 #     .env              local values (gitignored)
+#
+#   ./scripts/workflow_files.py build|split   render markers <-> extract files
 #
 #   ./scripts/workflows.sh import   # every workflows/*/workflow.json -> n8n
 #   ./scripts/workflows.sh export   # running n8n -> each workflow directory
@@ -71,7 +75,11 @@ case "${1:-}" in
     while IFS= read -r f; do
       found=1
       echo "-> $(dirname "$f")"
-      docker compose cp "$f" "n8n:/tmp/wf.json" >/dev/null < /dev/null
+      # Code and SQL live in files beside the manifest; render them into JSON for n8n.
+      rendered=$(mktemp)
+      python3 scripts/workflow_files.py build "$(dirname "$f")" --out "$rendered" >/dev/null
+      docker compose cp "$rendered" "n8n:/tmp/wf.json" >/dev/null < /dev/null
+      rm -f "$rendered"
       docker compose exec -T n8n n8n import:workflow --input=/tmp/wf.json < /dev/null | tail -1
     done < <(workflow_files)
     [ "$found" = 1 ] || { echo "no workflows/*/workflow.json found"; exit 1; }
@@ -93,7 +101,9 @@ case "${1:-}" in
       fi
       docker compose exec -T n8n n8n export:workflow --id="$id" --output=/tmp/wf-out.json < /dev/null >/dev/null
       docker compose cp n8n:/tmp/wf-out.json "$f" >/dev/null < /dev/null
-      echo "exported $id -> $f"
+      rm -rf "$(dirname "$f")/code" "$(dirname "$f")/sql"
+      python3 scripts/workflow_files.py split "$(dirname "$f")" >/dev/null
+      echo "exported $id -> $f (+ code/ and sql/)"
     done < <(workflow_files)
     ;;
 
