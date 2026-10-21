@@ -38,6 +38,18 @@ const summary = {
   commits_new: commitsNew,
   commits_pruned: commitsPruned,
   api_calls: Number(summaryItem.api_calls) || 0,
+  // Which trigger actually fired. n8n's $execution.mode only says test vs production, which lumps
+  // a schedule tick together with a CLI run — useless for "are my scheduled runs happening?".
+  // Asking each trigger node whether it produced data answers it directly. Referencing an
+  // unexecuted node throws, which is the signal.
+  trigger_mode: (() => {
+    const fired = (name) => {
+      try { return !!($(name) && $(name).first() !== undefined); } catch (e) { return false; }
+    };
+    if (fired('Every 6 Hours')) return 'schedule';
+    if (fired('Manual Run')) return 'manual';
+    return $execution.mode || 'unknown';
+  })(),
   telemetry: Array.isArray(summaryItem.telemetry) ? summaryItem.telemetry : [],
   note: failed > 0 ? `${failed} repositories did not complete` : null,
 };
