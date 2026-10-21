@@ -4,7 +4,8 @@ Collects **every public repository** an account owns, with its **full commit his
 hands the records to `persist-010-commits-to-postgres`. The database is the product; a
 dashboard reads it instead of talking to GitHub itself.
 
-- **Schedule:** every 6 hours, plus on-demand via the `Manual Run` trigger.
+- **Schedule:** hourly — GitHub's rate-limit window refreshes hourly, so an hourly pass keeps the
+  database at most an hour stale for one listing call. Also on-demand via the `Manual Run` trigger.
 - **Writes (product):** nothing directly. It POSTs records to the persist webhook, which owns
   every write to `mnemora`.
 - **Reads (state):** `mnemora_repositories`, through a **read-only** role — what the database
@@ -30,7 +31,7 @@ settings it does read from the environment are in `.env.example` beside this fil
 
 ## Nodes
 
-`Manual Run` / `Every 6 Hours` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Pipe Batches` → `Save to Pipe` → `Record Run` → `Release Run Lock`
+`Manual Run` / `Every Hour` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Pipe Batches` → `Save to Pipe` → `Record Run` → `Release Run Lock`
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Collect` → `To JSON File` → `Write Public Cache`
 
 `Build Plan` reads configuration; `Collect` does the work in one pass. They are separate
