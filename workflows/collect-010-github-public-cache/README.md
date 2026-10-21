@@ -16,6 +16,17 @@ dashboard reads it instead of talking to GitHub itself.
 - **Contract:** `docs/architecture/github-data.md`.
 - **Config:** this directory's `.env` (see `.env.example`), injected by compose.
 
+## Prerequisites
+
+| what | value | why |
+|---|---|---|
+| credential `Mnemora DB (read-only)` (type `postgres`) | database `mnemora`, user `mnemora_reader` | `Read State` decides what to fetch; the role can `SELECT` only and cannot reach n8n's database |
+| published + active | yes | the six-hour schedule only fires from a published version |
+| run lease | held by `persist-010` | a second concurrent run is refused instead of crawling twice |
+
+This workflow reads **no** database secrets itself: the connection is an n8n credential. The
+settings it does read from the environment are in `.env.example` beside this file.
+
 ## Nodes
 
 `Manual Run` / `Every 6 Hours` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Pipe Batches` → `Save to Pipe` → `Record Run` → `Release Run Lock`
