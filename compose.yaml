@@ -114,6 +114,10 @@ services:
       # then fail silently on an upgrade.
       N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: ${N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES:-268435456}
       N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: ${N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES:-1000}
+      # Code nodes cannot hold n8n credentials, so the pipe token reaches them as an env var.
+      # The HTTP nodes use the 'Mnemora Pipe' credential instead; this exists only for the three
+      # Code nodes that call the webhook directly (lease acquire/release, run summary).
+      MNEMORA_PIPE_TOKEN: ${MNEMORA_PIPE_TOKEN:?Set MNEMORA_PIPE_TOKEN in .env}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       # Read/Write Files is confined to an allowlist; the cache lives outside ~/.n8n.
       N8N_RESTRICT_FILE_ACCESS_TO: /home/node/mnemora-data
