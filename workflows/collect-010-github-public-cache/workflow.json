@@ -277,7 +277,7 @@
     {
       "id": "b2a0c1a0-0007-4000-8000-000000000007",
       "name": "Save to Pipe",
-      "notes": "Hands each record to persist-010-commits-to-postgres. The URL is the compose-network address (service n8n, port 5678), not the browser's 5680 \u2014 inside a container 127.0.0.1 is the container itself. If this fails after retries the run fails loudly: a run that collected data but never stored it must not report success.",
+      "notes": "Hands each record to persist-010, authenticated with the 'Mnemora Pipe' header credential. The token is a node credential rather than an env var, so it is readable only by this node \u2014 and not by every other workflow, which is what N8N_BLOCK_ENV_ACCESS_IN_NODE=false would otherwise allow. If this fails after retries the run fails loudly: data collected and never stored must not look like success.",
       "parameters": {
         "jsonBody": "={{ JSON.stringify($json) }}",
         "method": "POST",
@@ -286,7 +286,9 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "url": "http://n8n:5678/webhook/mnemora-commits"
+        "url": "http://n8n:5678/webhook/mnemora-commits",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
       },
       "position": [
         1140,
@@ -298,7 +300,13 @@
         "waitBetweenTries": 2000
       },
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5
+      "typeVersion": 4.5,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "jhB00dXqTKDjYtiQ",
+          "name": "Mnemora Pipe"
+        }
+      }
     },
     {
       "id": "b2a0c1a0-0009-4000-8000-000000000009",
