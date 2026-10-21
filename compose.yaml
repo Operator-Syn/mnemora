@@ -130,9 +130,6 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - collector_data:/home/node/mnemora-data
-      # Vendor patch: silences the unconditional "import from URL removed" migration notice.
-      # The capability is replaced by ./scripts/workflows.sh import-url. See ops/n8n/overrides/.
-      - ./ops/n8n/overrides/workflow-import-url-removed.rule.js:/usr/local/lib/node_modules/n8n/dist/modules/breaking-changes/rules/v3/workflow-import-url-removed.rule.js:ro
     networks:
       - backend
 
@@ -155,9 +152,6 @@ services:
     volumes:
       # Queue mode executes on the worker, so the collector cache must be mounted here too.
       - collector_data:/home/node/mnemora-data
-      # Vendor patch: silences the unconditional "import from URL removed" migration notice.
-      # The capability is replaced by ./scripts/workflows.sh import-url. See ops/n8n/overrides/.
-      - ./ops/n8n/overrides/workflow-import-url-removed.rule.js:/usr/local/lib/node_modules/n8n/dist/modules/breaking-changes/rules/v3/workflow-import-url-removed.rule.js:ro
     networks:
       - backend
 
