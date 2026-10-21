@@ -2,7 +2,7 @@
 -- Read-only role, so this endpoint cannot change anything even if its token leaks.
 select
   (select coalesce(jsonb_agg(r), '[]'::jsonb) from (
-     select run_id, status, repositories_total, repositories_fetched, repositories_skipped,
+     select run_id, status, trigger_mode, repositories_total, repositories_fetched, repositories_skipped,
             repositories_pending, repositories_failed, commits_new, commits_pruned,
             api_calls, started_at_utc, finished_at_utc,
             round(extract(epoch from (finished_at_utc - started_at_utc)))::int as seconds
