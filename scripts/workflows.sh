@@ -35,16 +35,27 @@ psql_db() {
 
 case "${1:-}" in
   import)
+    # A renamed node or a branch on a nonexistent output is invisible at runtime: the expression
+    # renders empty and the workflow still reports success. Refuse the import instead.
+    python3 scripts/check-workflow-refs.py || {
+      echo "refusing to import: fix the broken references above" >&2
+      exit 1
+    }
     found=0
     while IFS= read -r f; do
       found=1
       echo "-> $(dirname "$f")"
-      docker compose cp "$f" "n8n:/tmp/wf.json" >/dev/null
-      docker compose exec -T n8n n8n import:workflow --input=/tmp/wf.json | tail -1
+      docker compose cp "$f" "n8n:/tmp/wf.json" >/dev/null < /dev/null
+      docker compose exec -T n8n n8n import:workflow --input=/tmp/wf.json < /dev/null | tail -1
     done < <(workflow_files)
     [ "$found" = 1 ] || { echo "no workflows/*/workflow.json found"; exit 1; }
     # Import upserts by id; a rising count means a file lost its id.
     echo "workflows in database: $(psql_db 'select count(*) from workflow_entity;')"
+    echo
+    echo "note: an import writes a DRAFT. It does not publish, and importing deactivates the"
+    echo "      workflow, so any webhook or schedule it had stops until you publish it again."
+    echo "      Publish from the workflow UI, or with the n8n MCP publish_workflow tool."
+    echo "      Verify a webhook with a probe POST: 404 means unpublished, 500 means it ran."
     ;;
 
   export)
@@ -54,8 +65,8 @@ case "${1:-}" in
         echo "skip $(dirname "$f"): workflow.json has no id (import would duplicate)"
         continue
       fi
-      docker compose exec -T n8n n8n export:workflow --id="$id" --output=/tmp/wf-out.json >/dev/null
-      docker compose cp n8n:/tmp/wf-out.json "$f" >/dev/null
+      docker compose exec -T n8n n8n export:workflow --id="$id" --output=/tmp/wf-out.json < /dev/null >/dev/null
+      docker compose cp n8n:/tmp/wf-out.json "$f" >/dev/null < /dev/null
       echo "exported $id -> $f"
     done < <(workflow_files)
     ;;
