@@ -34,9 +34,26 @@ psql_db() {
 }
 
 case "${1:-}" in
+  check)
+    # Two independent gates, both cheap, both about failures that are invisible at runtime.
+    #   instance env  - pinned n8n limits have not drifted, and any Compression node states the
+    #                   payload size it must handle
+    #   workflow refs - every $('Name') resolves and no branch sits on an output that cannot exist
+    ./scripts/check-instance-env.py
+    refs=$?
+    python3 scripts/check-workflow-refs.py
+    refs2=$?
+    [ "$refs" -eq 0 ] && [ "$refs2" -eq 0 ]
+    exit $?
+    ;;
+
   import)
-    # A renamed node or a branch on a nonexistent output is invisible at runtime: the expression
-    # renders empty and the workflow still reports success. Refuse the import instead.
+    # Both checks block the import: a renamed node, a branch on a nonexistent output, or a
+    # workflow depending on a limit nobody recorded is a failure that looks like success.
+    ./scripts/check-instance-env.py || {
+      echo "refusing to import: fix the instance settings above" >&2
+      exit 1
+    }
     python3 scripts/check-workflow-refs.py || {
       echo "refusing to import: fix the broken references above" >&2
       exit 1
