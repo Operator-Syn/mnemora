@@ -13,6 +13,7 @@ the nodes that declare it.
 
 | what | value | why |
 |---|---|---|
+| credential `Mnemora Pipe` (type `httpHeaderAuth`) | header `X-Mnemora-Pipe-Token`, value in `.env` as `MNEMORA_PIPE_TOKEN` | the webhook requires it; without the header n8n answers `403` before any workflow runs |
 | credential `Mnemora DB` (type `postgres`) | host `postgres`, port 5432, database `mnemora`, user `mnemora_app` | the write role. Owns the tables; cannot connect to `n8n`'s database. |
 | published | yes | an unpublished webhook answers `404` and every collector run fails loudly |
 
@@ -36,9 +37,17 @@ POST /webhook/mnemora-commits
 ```
 
 Inside the compose network: `http://n8n:5678/webhook/mnemora-commits`. Not `127.0.0.1:5680` — inside
-a container that address is the container itself. Unauthenticated by design for now: the stack binds
-`127.0.0.1` only. Before this is exposed on a network it needs header auth, because anything that
-can reach this URL can write rows.
+a container that address is the container itself.
+
+**Authenticated.** Every call must carry `X-Mnemora-Pipe-Token`; without it n8n answers `403` before
+the workflow executes. Layer on top: the whole stack publishes only on `127.0.0.1`, and the write
+role cannot reach `n8n`'s database. Two callers exist and both send the header:
+
+- `collect-010` — uses the `Mnemora Pipe` credential on its HTTP node, so the token never enters an
+  environment variable where other workflows could read it.
+- `scripts/backfill.sh` — reads `MNEMORA_PIPE_TOKEN` from `.env` (mode 0600, gitignored).
+
+Any manual `curl` now needs the header too: `-H "X-Mnemora-Pipe-Token: $MNEMORA_PIPE_TOKEN"`.
 
 ## Four payload shapes, four branches
 
@@ -79,11 +88,13 @@ verify what happened rather than assume: `repositories`, `repositories_archived`
 ```sh
 # a repository record
 curl -s -X POST http://127.0.0.1:5680/webhook/mnemora-commits \
+  -H "X-Mnemora-Pipe-Token: $MNEMORA_PIPE_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"repositories":[{"repository_id":1,"full_name":"test/x","source_state":"complete","commits":[]}]}'
 
 # the lease
 curl -s -X POST http://127.0.0.1:5680/webhook/mnemora-commits \
+  -H "X-Mnemora-Pipe-Token: $MNEMORA_PIPE_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"run_claim":{"action":"acquire","run_id":"probe","ttl_seconds":60}}'
 ```
