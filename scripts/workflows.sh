@@ -40,10 +40,12 @@ case "${1:-}" in
     #                   payload size it must handle
     #   workflow refs - every $('Name') resolves and no branch sits on an output that cannot exist
     ./scripts/check-instance-env.py
-    refs=$?
+    env_rc=$?
     python3 scripts/check-workflow-refs.py
-    refs2=$?
-    [ "$refs" -eq 0 ] && [ "$refs2" -eq 0 ]
+    refs_rc=$?
+    ./scripts/check-workflow-layout.py
+    layout_rc=$?
+    [ "$env_rc" -eq 0 ] && [ "$refs_rc" -eq 0 ] && [ "$layout_rc" -eq 0 ]
     exit $?
     ;;
 
@@ -56,6 +58,10 @@ case "${1:-}" in
     }
     python3 scripts/check-workflow-refs.py || {
       echo "refusing to import: fix the broken references above" >&2
+      exit 1
+    }
+    ./scripts/check-workflow-layout.py || {
+      echo "refusing to import: fix the workflow layout above" >&2
       exit 1
     }
     found=0
