@@ -39,17 +39,6 @@
         ]
       ]
     },
-    "Every 6 Hours": {
-      "main": [
-        [
-          {
-            "index": 0,
-            "node": "Build Plan",
-            "type": "main"
-          }
-        ]
-      ]
-    },
     "Manual Run": {
       "main": [
         [
@@ -115,6 +104,17 @@
           }
         ]
       ]
+    },
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Build Plan",
+            "type": "main"
+          }
+        ]
+      ]
     }
   },
   "id": "Nj4F0WC8e2SMHvfh",
@@ -152,15 +152,15 @@
     },
     {
       "id": "a1000000-0000-4000-8000-000000000001",
-      "name": "Every 6 Hours",
-      "notes": "THE AUTOMATIC START.\n\nn8n fires this every six hours once the workflow is ACTIVE. While it is inactive the schedule is dormant and only the manual start works.\n\nThis is also the switch that starts making outbound GitHub requests on its own, which is why activation is left as a deliberate decision rather than something that happens on import.",
+      "name": "Every Hour",
+      "notes": "Runs hourly: GitHub's rate limit window refreshes hourly, so an hourly pass keeps the database at most an hour behind without ever approaching the quota. An idle run costs one listing call.",
       "notesInFlow": true,
       "parameters": {
         "rule": {
           "interval": [
             {
               "field": "hours",
-              "hoursInterval": 6
+              "hoursInterval": 1
             }
           ]
         }
@@ -355,6 +355,7 @@
   "settings": {
     "availableInMCP": true,
     "executionOrder": "v1",
-    "executionTimeout": 900
+    "executionTimeout": 900,
+    "errorWorkflow": "QMoREhAh3SDxstBU"
   }
 }
