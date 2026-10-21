@@ -46,7 +46,7 @@ const summary = {
     const fired = (name) => {
       try { return !!($(name) && $(name).first() !== undefined); } catch (e) { return false; }
     };
-    if (fired('Every 6 Hours')) return 'schedule';
+    if (fired('Every Hour')) return 'schedule';
     if (fired('Manual Run')) return 'manual';
     return $execution.mode || 'unknown';
   })(),
