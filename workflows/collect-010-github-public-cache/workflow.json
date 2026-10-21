@@ -337,7 +337,8 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "executionTimeout": 900
+    "executionTimeout": 900,
+    "availableInMCP": true
   },
   "active": false,
   "pinData": {},
