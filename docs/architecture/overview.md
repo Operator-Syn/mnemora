@@ -45,6 +45,10 @@ Product data lives in its **own database**, not inside n8n's.
 database "n8n"*. The persist workflow therefore cannot read n8n's credentials table even if
 it is misconfigured, and a `pg_dump` of the product is independent of n8n's.
 
+Schema changes go through `db/migrations/` (numbered, applied once, checksummed) via
+`./scripts/migrate.sh`. A migration that has already run must never be edited — edit is
+reported as drift, and drift exits non-zero so a check can catch it.
+
 **What this boundary does not give you:** both databases still share one PostgreSQL cluster
 and therefore one data volume and one `docker compose down -v`. Isolation is at the level of
 database, privileges and backup, not lifecycle. If a shared cluster's failure must not take
