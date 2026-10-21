@@ -194,6 +194,14 @@ with explicit headroom rather than the default.
 **I-8 — `collector-status.json` is written by `Collect`.** It is the only per-repository run
 report. Removing it during the rewire loses observability exactly when it is needed.
 Mitigation: keep writing it; treat it as derived, and consider a `mnemora_runs` table later.
+**Done:** `mnemora_runs` (migration `0004`), written by a `Record Run` node at the end of the
+pipeline. The status file stays as an export, but it was overwritten every run, so yesterday's
+run left nothing behind; n8n's `execution_entity` is not a substitute either — it is pruned at
+168 h and CLI executions never leave `running`.
+Counts are read, not estimated: repository outcomes from the status item, commit numbers summed
+from persist's per-record answers, API calls counted inside `Collect`.
+Verified across a real cold start: run 1 recorded `fetched=12 pending=12 commits_seen=2278
+api_calls=45`; run 2 recorded `fetched=12 skipped=12 pending=0 commits_seen=4715 api_calls=68`.
 
 **I-9 — Denormalised `full_name` on commits.** A renamed repository keeps its `repository_id` and
 changes `full_name`; commit rows carry the old name unless the upsert refreshes it. Mitigation:
@@ -222,6 +230,7 @@ valid, it is marked superseded with the reason.
 |---|---|---|---|---|
 | **AC-13** | 2026-10-21 | Timestamps from Postgres (`2026-10-18 01:09:49+00`) never equal GitHub's ISO strings (`2026-10-18T01:09:49Z`), so `reuse()` was always false and every "skipped" repository was silently re-fetched in full — 24 repositories, ~95 calls per run. | A warm run with unchanged upstream must report `skipped` for every repository and finish in seconds, not minutes. | passing (7 s, 24/24 skipped) |
 | **AC-14** | 2026-10-21 | Wiring a second branch to `main[1]` of a Code node orphaned the cache export: Code nodes have one output, so the export silently stopped running while the run reported success. | After any connectivity change, the cache export must be observed to run (status file mtime advances), not assumed. | passing |
+| **AC-19** | 2026-10-21 | Run history lived only in a file that each run overwrote, so no question about past runs could be answered from the product database. | Every run must leave one queryable row with its own outcomes and cost, and rows must not overwrite each other. | passing (two consecutive runs produced two distinct rows) |
 | **AC-17** | 2026-10-21 | A first run against an empty database fetched every repository in one burst (~95 calls, 252 s). Interrupted halfway, the database looked identical to a completed run with fewer repositories, and nothing recorded what was still owed. | A cold start must be bounded per run, resumable, and must leave uncollected repositories visible as such — never prunable, never indistinguishable from empty. | passing (2 runs: 12 collected + 12 pending, then the rest) |
 | **AC-18** | 2026-10-21 | `scripts/workflows.sh import` only ever imported the first workflow file: `docker compose exec -T` inherits stdin, which was the `while read` list, so every later filename was swallowed. Silent, and it meant an edited workflow was never deployed. | Import must report every workflow it claims to import, and the count must match the files on disk. | passing (two `->` lines, two imports) |
 | **AC-16** | 2026-10-21 | Two runs started at once would crawl the same 24 repositories twice; the second one's work is wasted and can push a run into the quota reserve. | A run must refuse to start while another holds the lease: non-zero exit within seconds, the holder named, nothing written. | passing (refused in 5 s, holder named) |
@@ -244,6 +253,7 @@ condition is not proven, it says so.
 | AC-8 | **passing** | persist unpublished → webhook 404, collector exit 1, `refreshed_at_utc` unchanged, 6,993 commits intact; after republishing, the next run succeeded in 7 s. |
 | AC-9 | **passing** | `mnemora_reader` reads 24 rows; `insert` → `permission denied for table mnemora_repositories`; `-d n8n` → `permission denied for database "n8n"`. |
 | AC-10 | **passing** | Product tables truncated, `public/` moved aside, run held a `pg_dump` safety net: 252 s later, **24 repositories / 6,993 commits** reproduced from GitHub alone, all 24 fetched in full. |
+| AC-19 | **passing** | Two consecutive warm runs → two rows (`run_id` 793, 821), 24 skipped each, 1 API call each. A real cold start → `fetched=12 pending=12`, then `fetched=12 skipped=12 pending=0`, with commit counts 2,278 then 4,715 and API calls 45 then 68. |
 | AC-17 | **passing** | Truncated both tables, cap 12: run 1 → 24 rows, 2,278 commits, 12 `pending`, 68 s; run 2 → 6,993 commits, 0 `pending`, 116 s. Nothing was pruned by a `pending` record. |
 | AC-18 | **passing** | After detaching stdin, `import` printed both workflows and imported both; the reference checker runs first and refuses a broken file. |
 | **AC-16** | **passing** | A second run is refused while one is in flight, within seconds, naming the holder, without touching the database. | Two real overlapping runs (the first forced into a 250 s full resync): the second exited 1 after 5 s with `another run holds the lease (run 487, expires ...)`. An externally held lease refused a run in 5 s too; releasing it restored an 8 s / 24-skipped run. |
