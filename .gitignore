@@ -4,3 +4,6 @@ workflows/*/.env
 .hermes/
 __pycache__/
 *.pyc
+
+# Backup dumps contain the product database. They are gitignored above; this note exists
+# because gitignore does not control file modes. chmod 600 after every pg_dump.
