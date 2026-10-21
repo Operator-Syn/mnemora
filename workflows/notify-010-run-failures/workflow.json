@@ -1,0 +1,88 @@
+{
+  "name": "notify-010-run-failures",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d4c0e1a0-0001-4000-8000-000000000001",
+      "name": "On Workflow Failure",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Fires when a workflow that names this one as its error workflow fails. Before this existed a failed run left no row anywhere: successful executions are not stored by n8n here, and the run summary is written by the last node, which a failed run never reaches. NOTE: n8n refuses to run an error workflow that is not published \u2014 it logs 'is not active and cannot be executed' and the failure goes unrecorded."
+    },
+    {
+      "parameters": {
+        "jsCode": "@file:code/build-failure-summary.js"
+      },
+      "id": "d4c0e1a0-0002-4000-8000-000000000002",
+      "name": "Build Failure Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Turns n8n's error payload into one INSERT with the failing node named. Escapes quotes by hand because the Postgres node splits query parameters on commas."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "id": "d4c0e1a0-0004-4000-8000-000000000004",
+      "name": "Record Failure",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "TgDbIuhWsAv9mDzk",
+          "name": "Mnemora DB"
+        }
+      },
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      "notes": "Writes the failure row straight into mnemora_runs with the same credential the persist workflow uses. Deliberately not through the write pipe: the pipe is the component most likely to be the thing that failed, and a failure logger that depends on it records nothing when it matters."
+    }
+  ],
+  "connections": {
+    "On Workflow Failure": {
+      "main": [
+        [
+          {
+            "node": "Build Failure Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Failure Summary": {
+      "main": [
+        [
+          {
+            "node": "Record Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "active": false,
+  "id": "QMoREhAh3SDxstBU"
+}
