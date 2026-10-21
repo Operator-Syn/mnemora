@@ -1,98 +1,98 @@
 {
+  "active": false,
+  "connections": {
+    "Read Stats": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Reply",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Telemetry In (Webhook)": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Stats",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "id": "jHgEf2hYom9Z5MiD",
   "name": "debug-010-telemetry",
   "nodes": [
     {
-      "parameters": {
-        "httpMethod": "GET",
-        "path": "mnemora-telemetry",
-        "authentication": "headerAuth",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "c3b0d1a0-0001-4000-8000-000000000001",
-      "name": "Telemetry In (Webhook)",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        0,
-        0
-      ],
-      "webhookId": "mnemora-telemetry-in",
       "credentials": {
         "httpHeaderAuth": {
           "id": "ZPGjjBmZGDC3sqS3",
           "name": "Mnemora Telemetry"
         }
       },
-      "notes": "Authenticated read endpoint: GET /webhook/mnemora-telemetry, requires the X-Mnemora-Token header. Without a valid header n8n answers 403 before any query runs. The token lives in the 'Mnemora Telemetry' credential (encrypted with N8N_ENCRYPTION_KEY) and its value is in the stack .env as MNEMORA_TELEMETRY_TOKEN."
-    },
-    {
+      "id": "c3b0d1a0-0001-4000-8000-000000000001",
+      "name": "Telemetry In (Webhook)",
+      "notes": "Authenticated read endpoint: GET /webhook/mnemora-telemetry, requires the X-Mnemora-Token header. Without a valid header n8n answers 403 before any query runs. The token lives in the 'Mnemora Telemetry' credential (encrypted with N8N_ENCRYPTION_KEY) and its value is in the stack .env as MNEMORA_TELEMETRY_TOKEN.",
       "parameters": {
-        "operation": "executeQuery",
-        "query": "-- One row, three answers: what recent runs did, what is currently wrong, and what is slow.\n-- Read-only role, so this endpoint cannot change anything even if its token leaks.\nselect\n  (select coalesce(jsonb_agg(r), '[]'::jsonb) from (\n     select run_id, status, repositories_total, repositories_fetched, repositories_skipped,\n            repositories_pending, repositories_failed, commits_new, commits_pruned,\n            api_calls, started_at_utc, finished_at_utc,\n            round(extract(epoch from (finished_at_utc - started_at_utc)))::int as seconds\n     from mnemora_runs order by finished_at_utc desc limit 20\n   ) r) as recent_runs,\n  (select coalesce(jsonb_agg(i), '[]'::jsonb) from (\n     select run_id, at_utc, subject, status, source_state, commit_pages, commits, duration_ms, message\n     from mnemora_telemetry\n     where source_state is distinct from 'complete'\n     order by at_utc desc limit 25\n   ) i) as recent_issues,\n  (select coalesce(jsonb_agg(s), '[]'::jsonb) from (\n     -- max(), not sum(): a repository's commit count is a property of the repository, not\n     -- something that accumulates per run. Summing counted a skipped run's copy of the same\n     -- number and doubled it.\n     select subject, max(duration_ms) as slowest_ms, max(commits) as commits,\n            count(*) filter (where status = 'full') as times_fetched\n     from mnemora_telemetry\n     where at_utc > now() - interval '7 days' and duration_ms is not null\n     group by subject order by max(duration_ms) desc nulls last limit 10\n   ) s) as slowest_repositories,\n  jsonb_build_object(\n    'last_run_age_seconds', (select round(extract(epoch from (now() - max(finished_at_utc))))::int from mnemora_runs),\n    'last_run_status',      (select status from mnemora_runs order by finished_at_utc desc limit 1),\n    'repositories',         (select count(*) from mnemora_repositories),\n    'commits',              (select count(*) from mnemora_commits),\n    'pending',              (select count(*) from mnemora_repositories where source_state = 'pending'),\n    'not_complete',         (select count(*) from mnemora_repositories where source_state is distinct from 'complete'),\n    'archived',             (select count(*) from mnemora_repositories where archived_at_utc is not null),\n    'run_lock_held',        (select count(*) from mnemora_run_lock),\n    'migrations_applied',   (select count(*) from mnemora_schema_migrations)\n  ) as health;",
-        "options": {}
+        "authentication": "headerAuth",
+        "httpMethod": "GET",
+        "options": {},
+        "path": "mnemora-telemetry",
+        "responseMode": "responseNode"
       },
-      "id": "c3b0d1a0-0002-4000-8000-000000000002",
-      "name": "Read Stats",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
       "position": [
-        220,
+        0,
         0
       ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "mnemora-telemetry-in"
+    },
+    {
       "credentials": {
         "postgres": {
           "id": "2e9YVERiyWeFthxi",
           "name": "Mnemora DB (read-only)"
         }
       },
-      "notes": "Runs as mnemora_reader: SELECT only, on the product database, with no access to n8n's own database. A leaked token can read run history and expose nothing else."
+      "id": "c3b0d1a0-0002-4000-8000-000000000002",
+      "name": "Read Stats",
+      "notes": "Runs as mnemora_reader: SELECT only, on the product database, with no access to n8n's own database. A leaked token can read run history and expose nothing else.",
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {},
+        "query": "@file:sql/read-stats.sql"
+      },
+      "position": [
+        220,
+        0
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {}
-      },
       "id": "c3b0d1a0-0003-4000-8000-000000000003",
       "name": "Reply",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "notes": "Returns recent_runs, recent_issues, slowest_repositories and a health block in one JSON object, so one request is enough to answer 'is it healthy, what broke, what is slow'.",
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
       "position": [
         440,
         0
       ],
-      "notes": "Returns recent_runs, recent_issues, slowest_repositories and a health block in one JSON object, so one request is enough to answer 'is it healthy, what broke, what is slow'."
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1
     }
   ],
-  "connections": {
-    "Telemetry In (Webhook)": {
-      "main": [
-        [
-          {
-            "node": "Read Stats",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Read Stats": {
-      "main": [
-        [
-          {
-            "node": "Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
   "settings": {
-    "executionOrder": "v1",
-    "availableInMCP": true
-  },
-  "active": false,
-  "id": "jHgEf2hYom9Z5MiD"
+    "availableInMCP": true,
+    "executionOrder": "v1"
+  }
 }
