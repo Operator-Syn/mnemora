@@ -144,6 +144,8 @@ def main():
     ap.add_argument("--save", metavar="DIR", help="also write it into workflows/<dir> with provenance")
     ap.add_argument("--yes", action="store_true", help="import despite the risk findings")
     ap.add_argument("--print-url", action="store_true", help="show the resolved URL and exit")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="fetch and inspect, import nothing — proves the path without changing the instance")
     args = ap.parse_args()
 
     url = rewrite(args.url)
@@ -178,6 +180,14 @@ def main():
             print("\nRefusing to import without --yes. Verify the source before granting this.")
             return 2
         print()
+
+    if args.dry_run:
+        print(f"\ndry run: {name} ({len(wf['nodes'])} nodes) would import; nothing was written.")
+        print(f"  name:      {name}")
+        print(f"  id:        {wf.get('id') or '(none — a new workflow would be created)'}")
+        print(f"  triggers:  {', '.join(sorted({n.get('type','').split('.')[-1] for n in wf['nodes'] if 'rigger' in n.get('type','') or n.get('type','').endswith('webhook')})) or 'none'}")
+        print(f"  findings:  {len(findings)}")
+        return 0
 
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as t:
         t.write(json.dumps(wf))
