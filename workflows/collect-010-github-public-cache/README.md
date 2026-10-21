@@ -18,7 +18,7 @@ dashboard reads it instead of talking to GitHub itself.
 
 ## Nodes
 
-`Manual Run` / `Every 6 Hours` → `Build Plan` → `Read State` → `Collect` → `Pipe Batches` → `Save to Pipe`
+`Manual Run` / `Every 6 Hours` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Pipe Batches` → `Save to Pipe` → `Release Run Lock`
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Collect` → `To JSON File` → `Write Public Cache`
 
 `Build Plan` reads configuration; `Collect` does the work in one pass. They are separate
@@ -35,6 +35,11 @@ cannot drop an entry without also failing.
 
 `Pipe Batches` splits database records from the export, passing skipped and failed records to
 the pipeline only — they must reach the database without overwriting a good cache file.
+
+`Acquire Run Lock` claims a lease in the product database before a single GitHub call, so a
+scheduled tick landing on a manual run fails in seconds instead of crawling everything twice. The
+lease is atomic (`INSERT ... ON CONFLICT DO UPDATE ... WHERE expired`), released when fetching
+finishes, and expires on its own if a run dies. `COLLECT_010_RUN_LOCK=false` bypasses it.
 
 `Save to Pipe` posts each record to `http://n8n:5678/webhook/mnemora-commits` (compose network,
 not the host's 5680). If it fails after retries the run fails: collected data that was never
