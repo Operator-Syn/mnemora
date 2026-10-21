@@ -72,7 +72,7 @@ settled here, each pinned in `compose.yaml` and overridable per deployment from 
 | Manual executions always run on workers; `OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS` removed | The variable was unset, so behaviour was implicit and 3.0 removes the choice. | Set to `true` explicitly — the same behaviour, stated rather than inherited. |
 | Unverified community packages disabled by default | No community package is installed. | `N8N_UNVERIFIED_PACKAGES_ENABLED=false`, explicit. |
 | Compression node limits lowered (2 GiB → 256 MiB, 5000 → 1000 entries) | No workflow uses a Compression node — verified by grep across `workflows/*/workflow.json`. | Pinned to the new ceilings, so a future workflow cannot be built against the old limits and then fail on upgrade. |
-| "Import from URL" removed from the editor | Never used; workflows are imported from the repository. | No action. |
+| "Import from URL" removed from the editor | This one is genuinely useful — it is how a workflow gets pulled out of a GitHub repo without cloning. Losing the menu item should not mean losing the capability. | Replaced at the CLI: `./scripts/workflows.sh import-url <url>`, which also inspects the workflow before importing. See below. |
 
 Also fixed while here: `WEBHOOK_URL` was the deprecated name and warned on every boot. It is now
 `N8N_WEBHOOK_URL`. After the change the boot log reports **no** deprecation lines.
@@ -102,6 +102,28 @@ Demonstrated, not asserted:
 | Compression node with no Notes contract | `FAIL … node 'Compress Backup' is a Compression node with no size contract` |
 | same node with the payload size recorded | `ok … compression nodes: 1`, plus a warning that it is running at the platform defaults |
 | `N8N_RUNNERS_TASK_TIMEOUT` lowered to 60 | `FAIL … is below 300 — the Collect node runs ~157 s in one task` |
+
+### Importing from a URL (replacement for the removed editor option)
+
+n8n 3.0 removes the editor's "Import from URL". The capability is kept where it can be tested and
+reviewed:
+
+```sh
+./scripts/workflows.sh import-url https://github.com/o/r/blob/main/workflows/wf.json --save import-010-x
+```
+
+- **GitHub links are rewritten** — `blob` → `raw.githubusercontent.com`, so a link copied from the
+  browser address bar works.
+- **The workflow is inspected first.** The scan reports Execute Command nodes, `$env` access
+  (every variable in the container is readable, including `N8N_ENCRYPTION_KEY`), outbound HTTP
+  hosts, webhook triggers, Code nodes and credential slots. Anything risky requires `--yes`; without
+  it the import is refused with the list.
+- **`--save` records provenance** — `workflows/<dir>/workflow.json` plus a README naming the source
+  URL, the import time and the n8n id. The id is stamped into the file, so re-importing updates that
+  workflow instead of creating a duplicate.
+- The usual rules still apply: the import is a **draft and deactivates** the workflow, so publish it
+  before any trigger fires. `./scripts/workflows.sh check` then validates layout and references like
+  any other directory.
 
 ### Deliberately not done
 
