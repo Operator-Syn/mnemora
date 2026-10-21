@@ -1,6 +1,6 @@
 # Workflows: authoring, versioning, running
 
-Status: first workflow implemented and executed (`collect-010-github-public-cache`). Written for n8n 2.44.4.
+Status: first workflow implemented and executed (`collect-010-github-public-cache`). Written for n8n 2.44.5.
 
 ## Naming
 
