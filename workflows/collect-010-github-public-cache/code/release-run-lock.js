@@ -11,7 +11,14 @@ try {
     method: 'POST',
     url: 'http://n8n:5678/webhook/mnemora-commits',
     body: { run_claim: { action: 'release', run_id: acquired.run_lock_id } },
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+    'Content-Type': 'application/json',
+    // A Code node cannot hold an n8n credential, so the pipe token comes from the environment.
+    // Trade-off, stated plainly: any workflow in this instance can read env vars, so this token is
+    // visible to all of them. The alternative was an unauthenticated write endpoint reachable by
+    // anything that could open a socket to this machine.
+    'X-Mnemora-Pipe-Token': $env.MNEMORA_PIPE_TOKEN || '',
+  },
     json: true,
     timeout: 15000,
   });
