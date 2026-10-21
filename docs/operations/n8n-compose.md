@@ -72,7 +72,7 @@ settled here, each pinned in `compose.yaml` and overridable per deployment from 
 | Manual executions always run on workers; `OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS` removed | The variable was unset, so behaviour was implicit and 3.0 removes the choice. | Set to `true` explicitly — the same behaviour, stated rather than inherited. |
 | Unverified community packages disabled by default | No community package is installed. | `N8N_UNVERIFIED_PACKAGES_ENABLED=false`, explicit. |
 | Compression node limits lowered (2 GiB → 256 MiB, 5000 → 1000 entries) | No workflow uses a Compression node — verified by grep across `workflows/*/workflow.json`. | Pinned to the new ceilings, so a future workflow cannot be built against the old limits and then fail on upgrade. |
-| "Import from URL" removed from the editor | This one is genuinely useful — it is how a workflow gets pulled out of a GitHub repo without cloning. Losing the menu item should not mean losing the capability. | Replaced at the CLI: `./scripts/workflows.sh import-url <url>`, which also inspects the workflow before importing. See below. |
+| "Import from URL" removed from the editor | Genuinely useful — it is how a workflow gets pulled out of a GitHub repo without cloning. Losing the menu item should not mean losing the capability. | Replaced at the CLI: `./scripts/workflows.sh import-url <url>`, which also inspects the workflow first. **The report item itself cannot be cleared — see below.** |
 
 Also fixed while here: `WEBHOOK_URL` was the deprecated name and warned on every boot. It is now
 `N8N_WEBHOOK_URL`. After the change the boot log reports **no** deprecation lines.
@@ -102,6 +102,39 @@ Demonstrated, not asserted:
 | Compression node with no Notes contract | `FAIL … node 'Compress Backup' is a Compression node with no size contract` |
 | same node with the payload size recorded | `ok … compression nodes: 1`, plus a warning that it is running at the platform defaults |
 | `N8N_RUNNERS_TASK_TIMEOUT` lowered to 60 | `FAIL … is below 300 — the Collect node runs ~157 s in one task` |
+
+### The import-from-URL notice cannot be dismissed
+
+This is the one migration item that stays in the report forever, and it is worth knowing why rather
+than retrying things that cannot work. The rule that emits it is
+`dist/modules/breaking-changes/rules/v3/workflow-import-url-removed.rule.js`, and its `detect()` is:
+
+```js
+async detect() {
+  return { isAffected: true, instanceIssues: [ ... ], recommendations: [ ... ] };
+}
+```
+
+No condition, no instance state, no feature flag — it reports that the *editor option* is gone,
+which is true on every 3.0 instance regardless of what you do. Checked and confirmed absent: any
+`dismiss` handling in the breaking-changes module, and any `IMPORT_FROM_URL` / `importFromUrl`
+setting in the shipped code. Refreshing the report cannot change it, and neither can a config
+change.
+
+So there are exactly two honest outcomes:
+
+1. **Keep 3.x and replace the capability** (what this repository does). The notice remains as
+   documentation of what n8n removed.
+2. **Stay on 2.x** if the editor menu itself matters more than the 3.0 upgrade — `N8N_VERSION=2.44.4`
+   is the pin this stack measured earlier. That trades away every other 3.0 improvement for a menu
+   item.
+
+Prove the replacement works without touching the instance:
+
+```sh
+./scripts/workflows.sh import-url --print-url https://github.com/o/r/blob/main/wf.json  # URL rewriting
+./scripts/workflows.sh import-url <url> --dry-run   # fetch + risk scan, writes nothing
+```
 
 ### Importing from a URL (replacement for the removed editor option)
 
