@@ -103,11 +103,10 @@ Demonstrated, not asserted:
 | same node with the payload size recorded | `ok … compression nodes: 1`, plus a warning that it is running at the platform defaults |
 | `N8N_RUNNERS_TASK_TIMEOUT` lowered to 60 | `FAIL … is below 300 — the Collect node runs ~157 s in one task` |
 
-### The import-from-URL notice cannot be dismissed
+### The import-from-URL notice: suppressed with a vendor override
 
-This is the one migration item that stays in the report forever, and it is worth knowing why rather
-than retrying things that cannot work. The rule that emits it is
-`dist/modules/breaking-changes/rules/v3/workflow-import-url-removed.rule.js`, and its `detect()` is:
+The report item is the one migration line that n8n gives you no way to retire. The rule ships at
+`dist/modules/breaking-changes/rules/v3/workflow-import-url-removed.rule.js` with
 
 ```js
 async detect() {
@@ -115,26 +114,38 @@ async detect() {
 }
 ```
 
-No condition, no instance state, no feature flag — it reports that the *editor option* is gone,
-which is true on every 3.0 instance regardless of what you do. Checked and confirmed absent: any
-`dismiss` handling in the breaking-changes module, and any `IMPORT_FROM_URL` / `importFromUrl`
-setting in the shipped code. Refreshing the report cannot change it, and neither can a config
-change.
+— no condition, no instance state, no feature flag. It is an **instance-level** rule, and
+`migration_finding` only triages **workflow-level** rules (its statuses are
+`open`, `notified`, `fixed`, `fixed_unpublished`, `wont_fix`), so there is no `wont_fix` row that
+could retire it either. Refreshing the report cannot clear it.
 
-So there are exactly two honest outcomes:
+Because the capability it warns about is already replaced here (`./scripts/workflows.sh import-url`),
+the rule is overridden rather than tolerated:
 
-1. **Keep 3.x and replace the capability** (what this repository does). The notice remains as
-   documentation of what n8n removed.
-2. **Stay on 2.x** if the editor menu itself matters more than the 3.0 upgrade — `N8N_VERSION=2.44.4`
-   is the pin this stack measured earlier. That trades away every other 3.0 improvement for a menu
-   item.
+```
+ops/n8n/overrides/workflow-import-url-removed.rule.js
+  → mounted over dist/modules/breaking-changes/rules/v3/workflow-import-url-removed.rule.js
+    on both n8n and worker, read-only
+```
 
-Prove the replacement works without touching the instance:
+`detect()` returns `isAffected: false`, so the line disappears from the report. Verified by asking
+the container what the rule now says:
 
 ```sh
-./scripts/workflows.sh import-url --print-url https://github.com/o/r/blob/main/wf.json  # URL rewriting
-./scripts/workflows.sh import-url <url> --dry-run   # fetch + risk scan, writes nothing
+./scripts/check-n8n-overrides.py
+# ok   n8n override mounted on n8n and worker; rule suppressed (live: ok)
 ```
+
+Two honest limits:
+
+- this **silences a notice, not a missing feature** — import-from-URL in the editor is gone from
+  n8n 3.x, and the CLI replacement is the capability;
+- it is **vendor code**. A version bump can change the module path or shape. The checker catches
+  both (mount missing, rule no longer suppressed) and `scripts/workflows.sh import` refuses to run
+  if it fails. If you ever want the notice back, remove the mount and delete the file.
+
+The other option remains: stay on `N8N_VERSION=2.44.4` if the editor menu itself matters more than
+3.0. It costs every other 3.0 improvement.
 
 ### Importing from a URL (replacement for the removed editor option)
 
