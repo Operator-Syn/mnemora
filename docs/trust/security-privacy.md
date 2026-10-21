@@ -45,6 +45,7 @@ instance on 2026-10-21, not inferred from configuration files.
 |---|---|---|
 | `POST /webhook/mnemora-commits` (write pipe) | `X-Mnemora-Pipe-Token` header → n8n credential `Mnemora Pipe`, answered by `403` before the workflow runs | anonymous `403`, wrong token `403`, correct token reaches the workflow |
 | `GET /webhook/mnemora-telemetry` (read endpoint) | same shape: `X-Mnemora-Token` → credential `Mnemora Telemetry` | anonymous `403`, wrong header name `403`, correct token `200` |
+| `notify-010-run-failures` | writes `mnemora_runs` directly with the `Mnemora DB` postgres credential, bypassing the pipe by design — it only ever inserts rows with `status = 'error'` | inserts nothing but run metadata; no commit or repository rows |
 | the database behind both | role-scoped: `mnemora_reader` can `SELECT` three tables, cannot write, cannot connect to the `n8n` database; the pipe's role cannot reach `n8n` either | `has_table_privilege` → select `t`, insert `f`, update `f`; `has_database_privilege(... 'n8n', 'CONNECT')` → `f` |
 | `/mcp-server/http` | token required by the MCP layer | `401` without a token |
 | editor and REST API | n8n login (owner account has a password set) | — |
