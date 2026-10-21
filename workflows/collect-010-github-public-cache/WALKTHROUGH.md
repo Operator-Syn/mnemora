@@ -1,155 +1,159 @@
 # How this workflow works — a plain-language walkthrough
 
-For reading end to end, without needing to hold the code in your head. The node-by-node
-version of this is inside the workflow itself: every node carries a **Notes** field, so
-opening it in the n8n canvas shows the same explanation in place.
+For reading end to end, without needing to hold the code in your head. The node-by-node version
+of this is inside the workflow itself: every node carries a **Notes** field, so opening it in the
+n8n canvas shows the same explanation in place.
 
 ## In one paragraph
 
-Once every six hours — or when you click run — the workflow asks GitHub for the list of
-public repositories belonging to your account. For each one it writes down the languages
-and the entire commit history, then saves one JSON file per repository into a cache
-folder. A dashboard later reads those files instead of calling GitHub. That is the whole
-job: **discover repositories, describe each one, save a copy.**
+When you click run — or every six hours once activated — the workflow asks GitHub for the public
+repositories belonging to your account, reads each one's languages and commit history, and hands
+the result to `persist-010`, which is the only thing that writes to the database. The database is
+the product; a dashboard will read it. The workflow also writes one JSON file per repository, but
+that is an **export**, not the source: delete it and the next run still knows exactly what it has.
+That is the whole job: **discover repositories, describe each one, hand them over.**
 
 ## The shape of it
 
 ```
   [Manual Run]  ─┐
-                 ├─→ [Build Plan] → [Read Existing Cache] → [Extract Cached Records]
-  [Every 6 Hours]┘        │                 │                      │
-                       settings          files on disk         parsed records
-                                                                  │
-                          ┌───────────────────────────────────────┘
-                          ↓
-                      [Collect] → [To JSON File] → [Write Public Cache]
-                          │            │                  │
-                     GitHub calls   one file each      saved to cache
+                 ├─→ [Build Plan] → [Read State] → [Collect] ─┬─→ [Pipe Batches] → [Save to Pipe]
+  [Every 6 Hours]┘        │              │            │       │                         ↓
+                       settings      Postgres      GitHub     │                  persist-010
+                                     (read-only)     API       └─→ [To JSON File] → [Write Public Cache]
 ```
 
-Two possible starts, one path through, so a manual run and a scheduled run can never
-diverge — they execute exactly the same steps.
+Two starts, one path through, so a manual run and a scheduled run cannot diverge.
 
-Two nodes between "settings" and "the work" exist so the collector can compare against
-what it already has. `Read Existing Cache` cannot hand a Code node real file bytes —
-n8n keeps binary payloads in the database, so it hands over a reference — which is why
-`Extract Cached Records` exists to turn those files into records n8n code can read.
+Two branches leave `Collect`, and the reason matters:
+
+- **up** — records go to the persist workflow, which owns every write to `mnemora`.
+- **down** — the same records are written as files, which are an export, not a source.
+
+`Read State` reads the database through a **read-only** role. It cannot write even if a query is
+wrong, and it cannot open n8n's own database at all.
 
 ## Step 1 — something starts it
 
 | start | when |
 |---|---|
 | **Manual Run** | you click "execute workflow" in n8n, or run `./scripts/workflows.sh run collect-010-github-public-cache` |
-| **Every 6 Hours** | on the clock, but only once the workflow is **activated** |
+| **Every 6 Hours** | on the clock, but only once the workflow is **published and active** |
 
-Nothing happens until one of these fires. Importing the workflow does not start it: it
-arrives inactive, because activation is the moment it begins making outbound requests on
-its own.
+Nothing happens until one of these fires. Importing the workflow does not start it: it arrives
+inactive, because activation is the moment it begins making outbound requests on its own.
 
 ## Step 2 — Build Plan: read the settings, touch nothing
 
-This step opens `.env` and answers four questions: which accounts to look at, how much
-history (all of it, or the last N days), whether forks and archived repositories count,
+This step reads `.env` and answers: which accounts to look at, how much history (all of it, or the
+last N days), how many pages of commits to allow, whether forks and archived repositories count,
 and whether there is a GitHub token to authenticate with.
 
-It makes **no network calls**. That is deliberate. A malformed setting — an empty account
-list, a nonsense number — fails here in a fraction of a second with a message naming the
-variable. The alternative is discovering it ninety seconds into a crawl of twenty-four
-repositories, with half a cache written.
+It makes **no network calls**. That is deliberate. A malformed setting — an empty account list, a
+nonsense number — fails here in a fraction of a second with a message naming the variable. The
+alternative is discovering it ninety seconds into a crawl of twenty-four repositories.
 
-The output is one small object: "look at these accounts, this much history, with these
-headers."
+## Step 3 — Read State: what does the database already know?
 
-## Step 3 — what do we already have?
+```sql
+select repository_id, full_name, pushed_at_utc, commit_count, source_state,
+       source_error, history, default_branch, data_changed_at_utc, archived_at_utc,
+       languages_bytes
+from mnemora_repositories
+order by full_name;
+```
 
-Before asking GitHub anything, the run loads the cache files it already wrote and turns
-them back into records, so the collector can compare.
+This replaced the two nodes that used to read and parse the cache files. The question the
+collector needs answered is "has this repository moved since I last looked", and `pushed_at_utc`
+answers it directly — no file reading, no parsing, and no second source of truth to drift.
 
-That takes two nodes rather than one because of a quirk worth knowing: n8n keeps binary
-payloads in its database, so a Code node never sees the file bytes — it sees a reference.
-`Extract Cached Records` is n8n's own JSON parser doing the reading.
-
-With the previous records in hand, each repository falls into one of three cases:
-
-| situation | what happens | cost |
-|---|---|---|
-| `pushed_at` has not moved since the cached copy | nothing is fetched; the file is left alone | **zero requests** |
-| `pushed_at` moved | only commits newer than the cached newest are fetched, then merged and de-duplicated by sha | a page or two |
-| no usable cache, or the history mode changed | the whole history is fetched again | full |
-
-Measured here: a cold run over 24 repositories takes 2 m 36 s and ~95 requests; a warm run
-with nothing changed takes **7.7 seconds**, and a run where one repository changed takes
-9.3 seconds.
-
-One safeguarding effect worth naming: because a skipped repository is never handed to the
-writer, its file keeps both its bytes and its modification time. The "we checked, nothing
-moved" signal is kept separately in a small `collector-status.json` that is rewritten every
-run, with a `refreshed_at_utc` (last check) and `data_changed_at_utc` (last real change) per
-repository.
-
-And one safeguard of its own: before merging, the collector confirms the cached newest
-commit still exists upstream. If it does not, history was rewritten (force-push), so that
-repository is re-fetched in full instead of merging commits GitHub no longer has.
+An empty result means a genuine cold start. A failure stops the run: treating an unreachable
+database as "nothing collected" would re-fetch everything and burn the API budget.
 
 ## Step 4 — Collect: the actual work
 
 One pass, three movements.
 
-**1. Find the repositories.** It asks GitHub for the public repositories of each account.
-The important property: that endpoint *does not return private repositories*, even when
-the request is authenticated. Private work is not filtered out by our code — it is
-unreachable through the door we knock on. That is a stronger guarantee than a rule we
-could forget to apply.
+**1. Compare, per repository.** Every repository falls into one of two cases:
 
-**2. Describe each repository.** For every one it makes two more requests: the language
-byte counts, and the commits. Commits arrive 100 at a time, so the step keeps asking for
-the next page until GitHub returns fewer than 100 — that is how "the end of history" is
-detected. `operator-synaciel` needs 29 pages; `camping-tweaks` needs one.
+| situation | what happens | cost |
+|---|---|---|
+| `pushed_at` has not moved, same branch, same history mode | nothing is fetched | **zero requests** |
+| moved, new, or forced | the whole history is fetched again | one request per 100 commits |
 
-**3. Assemble one record per repository** containing its identity, languages, the commits,
-and a status. Nothing is written yet.
+A changed repository is re-fetched **in full** rather than merged. Merging is the database's job
+now: commits are rows, and prune-on-complete keeps them honest after a force-push. The
+incremental `since` path is switched off in this version for exactly that reason — two
+reconciliation rules is one rule too many.
 
-Why this is a single node rather than a chain of one-node-per-repository: an earlier
-version read "the first item" at several points, which meant a two-repository allowlist
-produced one file and reported success. A single loop over a list cannot skip an entry
-without also failing loudly.
+**2. Fetch.** For each repository that needs it: the language byte counts, then commits 100 at a
+time until GitHub returns fewer than 100 — that is how "the end of history" is detected.
+`operator-synaciel` needs 29 pages. The run watches GitHub's remaining quota in response headers
+and stops spending at `COLLECT_010_RATE_RESERVE`, marking the rest `deferred` instead of failing
+each one.
 
-## Step 5 — To JSON File: turn records into bytes
+**3. Report.** Every repository produces a record, including the skipped ones — with
+`commits_omitted: true` — so the database learns it was checked and advances `refreshed_at_utc`
+without touching a commit row.
 
-Each record becomes a file in memory. Nothing touches disk here. It is a separate step
-only because n8n separates "make the bytes" from "save the bytes".
+Two comparisons here look trivial and are not:
 
-## Step 6 — Write Public Cache: save them
+- **Timestamps are compared as instants, not strings.** Postgres renders `2026-10-18 01:09:49+00`;
+  GitHub sends `2026-10-18T01:09:49Z`. Comparing those as text is always false, which turned every
+  "skipped" into a full refetch while the run still reported success.
+- **Archive detection uses every id the listing returned**, including forks and archived
+  repositories the filters drop. Comparing against the filtered list would archive a repository
+  merely because a filter excluded it.
 
-The files land in the cache volume, one per repository:
+Why this is a single node rather than a chain of one-node-per-repository: an earlier version read
+"the first item" at several points, which meant a two-repository allowlist produced one file and
+reported success. A single loop over a list cannot skip an entry without also failing loudly.
 
-```
-public/github-public-cache__operator-syn__arqen.json
-public/github-public-cache__operator-syn__camping-tweaks.json
-...
-```
+## Step 5 — Pipe Batches: separate database records from the export
 
-The filename is not constructed here. Each record already carries it in `cache_file`, so
-the file on disk and the name inside the record are the same string by construction — they
-cannot drift apart.
+Records go to the pipeline. The run-status item carries the two things the pipeline needs that are
+not repository records — the repositories that vanished upstream (`archived_repository_ids`) and
+the pipe-only records (skipped and failed fetches). Keeping those out of the export branch
+preserves its one-to-one relationship with the files it writes; a Code node has only one output,
+so both branches hang off that single output.
 
-One deployment detail that matters: in queue mode the **worker** container performs this
-write, not the main one. That is why the cache volume is mounted on both. Mount it only on
-the main container and every file lands in the worker's throwaway layer, appearing to work
-until the next restart.
+## Step 6 — Save to Pipe: hand them over
+
+One POST per record to `http://n8n:5678/webhook/mnemora-commits` — the compose-network address.
+
+Not `127.0.0.1:5680`. Inside a container that address is the container itself, and the call fails;
+the host port exists for your browser only. The worker image also has no `curl`, so any probe must
+use Node's `fetch` or n8n's own HTTP helper.
+
+If this fails after three retries the run fails. A run that fetched data and never stored it must
+not report success.
+
+## Step 7 — the export
+
+`To JSON File` turns each record into bytes, `Write Public Cache` saves it, filenames come from
+each record's own `cache_file` field, and `collector-status.json` records what the run did per
+repository.
+
+Deleting the export is safe. It exists so the data can be replayed into any database with
+`./scripts/backfill.sh` — which is how a 6,993-commit table was restored after a pruning bug
+emptied it in October 2026.
+
+One deployment detail that matters: in queue mode the **worker** performs this write. That is why
+the cache volume is mounted on both services. Mount it only on the main container and every file
+lands in the worker's throwaway layer, appearing to work until the next restart.
 
 ## A worked example
 
-Run against `Operator-Syn/arqen`, 24 October 2026:
+Run against `Operator-Syn/arqen`:
 
 | | |
 |---|---|
-| repositories found | 24 (every public repo, 3 forks included) |
+| repositories found | 24 (every public repo) |
 | commits fetched for `arqen` | 1,109 across 12 pages |
 | oldest commit seen | 2026-09-10 |
 | status | `complete` |
-| file written | `github-public-cache__operator-syn__arqen.json`, 434 KB |
-| whole run | ~95 requests, 2 m 36 s, 2.70 MiB total |
+| cold run, empty database and empty cache | 24 repositories, 6,993 commits, 252 s |
+| warm run, nothing changed | **7 s**, 24/24 `skipped`, zero commit requests |
 
 ## The status field, and why it is not always "fine"
 
@@ -158,38 +162,47 @@ Every record says how much to trust it. None of these is a crash; they are hones
 | status | meaning |
 |---|---|
 | `complete` | the whole history was read and nothing failed |
-| `partial` | a sub-request failed, or the safety cap on pages was hit; `source_error` says which |
-| `empty` | the repository genuinely has no commits (GitHub answers 409) — a real state, not an error |
+| `partial` | a sub-request failed, or the page cap was hit; `source_error` says which |
+| `empty` | the repository genuinely has no commits (GitHub answers 409) — a real state |
 | `error` | the commits could not be read at all |
+| `stale` | the fetch failed but earlier data is still valid |
 
-`commit_count` also carries `commit_count_definition` next to it, because the number is
-not what people assume: it counts commits returned by the API for the default branch,
-including bot authors and merges. On `arqen` the newest commit is authored by
-`github-actions[bot]`. It is a measure of repository activity, not of a person's work.
+Only `complete` records may prune. A `partial` or skipped record must never delete rows it did not
+fetch — that rule exists because breaking it once deleted every commit in the database.
+
+`commit_count` carries `commit_count_definition` next to it, because the number is not what people
+assume: it counts commits returned by the API for the default branch, including bot authors and
+merges. On `arqen` the newest commit is authored by `github-actions[bot]`. It measures repository
+activity, not a person's work.
 
 ## When something looks wrong, look here first
 
 ```sh
 # what the last runs did
 docker compose exec -T postgres psql -U n8n -d n8n \
-  -c "select status, mode, \"startedAt\" from execution_entity order by \"startedAt\" desc limit 5;"
+  -c 'select status, "startedAt" from execution_entity order by "startedAt" desc limit 5;'
 
-# how many repositories are actually cached
-docker compose exec -T worker sh -c 'ls -1 /home/node/mnemora-data/public/ | wc -l'
+# what the database believes, which is what the dashboard will show
+docker compose exec -T postgres psql -U mnemora_app -d mnemora \
+  -c 'select count(*) as repos, (select count(*) from mnemora_commits) as commits from mnemora_repositories;'
+
+# the collector's own per-repository report
+docker compose exec -T worker cat /home/node/mnemora-data/public/collector-status.json
 
 # does the container see the token at all?
 docker compose exec -T worker sh -c 'printf "%s\n" "${#COLLECT_010_GITHUB_TOKEN}"'
 ```
 
-A run that reports `success` while producing fewer files than you have public
-repositories means the collection loop stopped early — check `source_error` on the records
-that did land, then re-run.
+**A run that reports `success` is not evidence.** Twice during this workflow's construction the run
+succeeded while doing the wrong thing — once re-fetching every repository because two timestamp
+strings never matched, once silently skipping the cache export because a branch was wired to an
+output that does not exist. Check the database and the file timestamps, not the green tick.
 
 ## What it deliberately does not do
 
-- **No private repositories.** Not filtered, unreachable.
-- **No merging.** Full history is re-fetched each run rather than appended to the previous
-  file, so a rewritten or force-pushed history corrects itself instead of leaving ghosts.
-- **No dashboard.** This workflow only fills the cache; something else has to read it.
-- **No automatic activation.** A workflow that starts calling out the moment it is
-  imported is a surprise nobody wants.
+- **No private repositories.** Not filtered, unreachable: the listing endpoint never returns them.
+- **No incremental merge.** A changed repository is re-fetched in full; the database holds the
+  merge, and pruning removes what vanished.
+- **No dashboard.** This workflow fills the database; something else reads it.
+- **No automatic activation, and no automatic publishing.** A workflow that starts calling out the
+  moment it is imported is a surprise nobody wants, and an imported workflow is not a running one.
