@@ -53,6 +53,28 @@
         "waitBetweenTries": 2000
       },
       "notes": "Writes the failure row straight into mnemora_runs with the same credential the persist workflow uses. Deliberately not through the write pipe: the pipe is the component most likely to be the thing that failed, and a failure logger that depends on it records nothing when it matters."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.release_sql }}",
+        "options": {}
+      },
+      "id": "d4c0e1a0-0005-4000-8000-000000000005",
+      "name": "Release Lease",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        660,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "TgDbIuhWsAv9mDzk",
+          "name": "Mnemora DB"
+        }
+      },
+      "notes": "Deletes the failed run's own lease, so one transient error does not block every later tick until the TTL expires. Scoped to run_id: if another run holds the lease it is left alone, because that run may still be alive."
     }
   ],
   "connections": {
@@ -72,6 +94,17 @@
         [
           {
             "node": "Record Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Failure": {
+      "main": [
+        [
+          {
+            "node": "Release Lease",
             "type": "main",
             "index": 0
           }
