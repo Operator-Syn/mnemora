@@ -99,12 +99,13 @@
     {
       "id": "a1f0c1a0-0001-4000-8000-000000000001",
       "name": "Commits In (Webhook)",
-      "notes": "Entry point of the pipe. Anything that has repository observations POSTs them here: the collector workflow, the backfill replay of cached JSON files, or you with curl. Unauthenticated by design for now \u2014 the stack binds 127.0.0.1 only. Before this is exposed on a network it needs header auth, because anything that can reach this URL can write rows.",
+      "notes": "Authenticated write endpoint: POST /webhook/mnemora-commits requires the X-Mnemora-Pipe-Token header. Without it n8n answers 403 before the workflow runs, so nothing on this machine can write rows merely by reaching the port. The token lives in the 'Mnemora Pipe' credential and in the stack .env as MNEMORA_PIPE_TOKEN for scripts.",
       "parameters": {
         "httpMethod": "POST",
         "options": {},
         "path": "mnemora-commits",
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "authentication": "headerAuth"
       },
       "position": [
         -220,
@@ -112,7 +113,13 @@
       ],
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "webhookId": "mnemora-commits-in"
+      "webhookId": "mnemora-commits-in",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "jhB00dXqTKDjYtiQ",
+          "name": "Mnemora Pipe"
+        }
+      }
     },
     {
       "id": "a1f0c1a0-0002-4000-8000-000000000002",
