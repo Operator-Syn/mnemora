@@ -1,9 +1,19 @@
--- Mnemora schema. The product's data lives here; n8n workflows are the only writers.
+-- Mnemora schema. The product's data lives in its OWN database, `mnemora`, not inside the
+-- n8n database. n8n keeps ~150 tables of its own state; product data must not share that
+-- blast radius, that backup, or that role's privileges.
 --
--- Idempotent on purpose: run it on every deploy and it converges.
---   docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < db/schema.sql
+-- Topology:
+--   database  mnemora      owned by role mnemora_app
+--   database  n8n          n8n's own state; CONNECT revoked from PUBLIC
+--   role      mnemora_app  LOGIN, owns only this database, CANNOT connect to n8n
 --
--- Owned by the persist workflow. The collector reads it; nothing else writes it.
+-- Idempotent on purpose: run it on every deploy and it converges. Apply as the app role so
+-- the objects are owned by it rather than by n8n's superuser:
+--
+--   { echo 'SET ROLE mnemora_app;'; cat db/schema.sql; } \
+--     | docker compose exec -T postgres psql -U "$POSTGRES_USER" -d mnemora -v ON_ERROR_STOP=1
+--
+-- Written by the persist workflow. The collector reads it; nothing else writes it.
 
 -- One row per repository ever seen. This is also the collector's source of truth for
 -- "what do I already have" — pushed_at_utc decides whether a repository needs re-fetching.
