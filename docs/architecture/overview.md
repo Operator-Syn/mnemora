@@ -31,6 +31,27 @@ everything blindly.
 5. **Store** — PostgreSQL, with public and private records separated by rule and by role, not by directory.
 6. **Entitlement service (future, gated)** — maps verified billing state to time-bounded read access. Must not be implemented until ownership model, payment provider, policies and security have been reviewed.
 
+## Data topology (decided 2026-10-21)
+
+Product data lives in its **own database**, not inside n8n's.
+
+| database | owner | contents |
+|---|---|---|
+| `n8n` | `n8n` | ~150 tables of n8n's own state: workflows, executions, credentials, users |
+| `mnemora` | `mnemora_app` | `mnemora_repositories`, `mnemora_commits` — the product's data |
+
+`CONNECT` is revoked from `PUBLIC` on both, and `mnemora_app` is granted it only on
+`mnemora`. Verified: connecting as `mnemora_app` to `n8n` fails with *permission denied for
+database "n8n"*. The persist workflow therefore cannot read n8n's credentials table even if
+it is misconfigured, and a `pg_dump` of the product is independent of n8n's.
+
+**What this boundary does not give you:** both databases still share one PostgreSQL cluster
+and therefore one data volume and one `docker compose down -v`. Isolation is at the level of
+database, privileges and backup, not lifecycle. If a shared cluster's failure must not take
+the product down with n8n, that needs a second Postgres service — a cost in memory and
+operations that has not been justified yet.
+
+
 ## Data flow
 
 ```text
