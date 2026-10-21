@@ -56,4 +56,14 @@ on conflict (run_id) do update set
   finished_at_utc = excluded.finished_at_utc,
   trigger_mode    = excluded.trigger_mode;`;
 
-return [{ json: { sql, run_id: runId, note, trigger_mode: triggerMode } }];
+// A failed run never reaches `Release Run Lock`, so its lease survives until the TTL expires and
+// every tick in between is refused with "another run holds the lease". One transient DNS failure
+// then costs the whole window, and the refusals look like independent failures.
+//
+// Only this execution's own lease is deleted: if the holder is a different run, this must do
+// nothing, because that run may still be alive.
+const releaseSql = `delete from mnemora_run_lock
+where lock_name = 'collector' and run_id = ${quote(runId)}
+returning run_id;`;
+
+return [{ json: { sql, release_sql: releaseSql, run_id: runId, note, trigger_mode: triggerMode } }];
