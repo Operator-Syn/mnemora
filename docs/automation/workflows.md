@@ -132,7 +132,7 @@ Two honest labels are deliberate and should not be "fixed":
 
 - `active` is `false`. The schedule does not fire until the workflow is published and active, which starts recurring outbound collection and should be an explicit decision.
 - **Nothing prunes or archives yet at the workflow level** — that is `persist-010`'s job, and it is implemented: prune only on complete records, archive vanished repositories rather than deleting them.
-- No overlap guard: a schedule tick during a manual run would fetch twice. Writes stay correct (idempotent, keyed by sha), but the calls are wasted. `executionTimeout` is set to 900 s against a measured 252 s cold run.
+- Overlap is guarded by a database lease: a second run fails within seconds, naming the holder, instead of crawling twice. `executionTimeout` is 900 s against a measured 252 s cold run.
 - A GitHub token exists and is required in practice: anonymous access is 60 requests/hour, which one cold run exceeds.
 - Commit pagination runs to the end of history (`COLLECT_010_MAX_COMMIT_PAGES` caps it; hitting the cap marks the record `partial`). No retry/backoff for `202 Accepted` statistics endpoints.
 - The dashboard is unbuilt. The database it will read is populated and verified.
