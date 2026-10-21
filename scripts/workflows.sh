@@ -79,6 +79,10 @@ case "${1:-}" in
       exit 1
     }
     found=0
+    # Import deactivates every workflow it touches, which silently disarms production: a schedule
+    # stops firing and a webhook starts answering 404. Record what is armed now, so the aftermath
+    # can be named instead of discovered the next time something fails to run.
+    armed_before=$(psql_db "select id from workflow_entity where active and \"activeVersionId\" is not null order by id;")
     while IFS= read -r f; do
       found=1
       echo "-> $(dirname "$f")"
@@ -93,10 +97,41 @@ case "${1:-}" in
     # Import upserts by id; a rising count means a file lost its id.
     echo "workflows in database: $(psql_db 'select count(*) from workflow_entity;')"
     echo
-    echo "note: an import writes a DRAFT. It does not publish, and importing deactivates the"
-    echo "      workflow, so any webhook or schedule it had stops until you publish it again."
-    echo "      Publish from the workflow UI, or with the n8n MCP publish_workflow tool."
-    echo "      Verify a webhook with a probe POST: 404 means unpublished, 500 means it ran."
+    disarmed=$(psql_db "select id || '  ' || name from workflow_entity
+      where id = any(string_to_array(nullif('$(echo "$armed_before" | tr '\n' ',' | sed 's/,$//')', ''), ','))
+        and not (active and \"activeVersionId\" is not null)
+      order by name;")
+    if [ -n "$disarmed" ]; then
+      echo "!! DISARMED by this import — these were published and now are not:"
+      echo "$disarmed" | sed 's/^/     /'
+      echo
+      echo "   Their schedules will not fire and their webhooks answer 404 until republished."
+      echo "   Republish from the workflow UI, or with the n8n MCP publish_workflow tool."
+      echo "   The CLI cannot do it: 'n8n publish:workflow' prints 'restart n8n for changes to take"
+      echo "   effect' and a live instance keeps answering 404 (measured, not assumed)."
+      echo "   Check with: ./scripts/workflows.sh status"
+    else
+      echo "nothing was armed before this import, so nothing was disarmed."
+    fi
+    ;;
+
+  status)
+    # One place to answer: is production actually armed? A workflow that is active but unpublished,
+    # or published but inactive, is broken in a way that looks fine in the editor.
+    printf '%-18s %-34s %-9s %-10s %s\n' ID NAME ACTIVE PUBLISHED VERDICT
+    broken=0
+    while IFS='|' read -r id name active published; do
+      [ -n "${id:-}" ] || continue
+      if [ "$active" = "t" ] && [ "$published" = "t" ]; then verdict="armed"
+      elif [ "$active" = "f" ] && [ "$published" = "f" ]; then verdict="idle"
+      else verdict="BROKEN"; broken=1
+      fi
+      printf '%-18s %-34s %-9s %-10s %s\n' "$id" "$name" "$active" "$published" "$verdict"
+    done < <(psql_db "select id || '|' || name || '|' ||
+                             case when active then 't' else 'f' end || '|' ||
+                             case when \"activeVersionId\" is not null then 't' else 'f' end
+                     from workflow_entity order by name;")
+    [ "$broken" = 0 ] || { echo; echo "a workflow is half-enabled: publish and activate it, or neither"; exit 1; }
     ;;
 
   export)
