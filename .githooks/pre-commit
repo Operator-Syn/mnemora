@@ -1,0 +1,45 @@
+#!/bin/sh
+# One file per commit.
+#
+# Why: a commit that touches exactly one path is trivially reviewable, trivially
+# revertible, and impossible to bisect into ambiguity. Grouping unrelated edits in one
+# commit is how "which change broke this?" becomes a research project.
+#
+# Escape hatches, both deliberate:
+#   - merge commits are exempt (a merge legitimately carries many paths)
+#   - `git commit --no-verify` skips this check entirely, for the rare case that needs it
+#
+# Install: git config core.hooksPath .githooks   (or ./scripts/setup-hooks.sh)
+set -eu
+
+git_dir=$(git rev-parse --git-dir)
+
+# A merge commit brings in whatever the merge brought in; do not police it.
+if [ -f "$git_dir/MERGE_HEAD" ]; then
+  exit 0
+fi
+
+# Everything staged, including deletions and renames.
+staged=$(git diff --cached --name-only --diff-filter=ACMRDTUX)
+
+count=$(printf '%s\n' "$staged" | sed '/^$/d' | wc -l | tr -d ' ')
+
+if [ "$count" -eq 0 ]; then
+  echo "pre-commit: nothing staged — this hook exists to keep commits single-file." >&2
+  exit 1
+fi
+
+if [ "$count" -ne 1 ]; then
+  echo "pre-commit: one file per commit. $count files are staged:" >&2
+  printf '%s\n' "$staged" | sed 's/^/  /' >&2
+  echo "" >&2
+  echo "Stage one path at a time, e.g.:" >&2
+  echo "  git reset            # unstage all" >&2
+  echo "  git add <one-path>" >&2
+  echo "  git commit -m '...'" >&2
+  echo "" >&2
+  echo "Override deliberately with: git commit --no-verify" >&2
+  exit 1
+fi
+
+exit 0
