@@ -12,6 +12,14 @@ Without a valid header n8n answers **403** before a single query runs. The token
 `Mnemora Telemetry` credential (encrypted with `N8N_ENCRYPTION_KEY`) and its value is in the stack
 `.env` as `MNEMORA_TELEMETRY_TOKEN`.
 
+## Why `trigger_mode` matters
+
+n8n keeps only manual executions and failures in this stack (`EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`),
+so a scheduled run never appears in the editor's Executions tab. Before this column existed, a
+schedule tick and a click were identical in the run book — which made "are my scheduled runs
+happening?" unanswerable. It is now the first thing to look at, and the value comes from asking each
+trigger node whether it fired, not from `$execution.mode` (which only says test vs production).
+
 ## Why it exists
 
 `mnemora_runs` answers *what* a run did in aggregate. It cannot answer *which* repository was slow,
@@ -24,7 +32,7 @@ report.
 
 | field | answers |
 |---|---|
-| `recent_runs` | last 20 runs: status, counts, commits new/pruned, API calls, duration |
+| `recent_runs` | last 20 runs: **trigger_mode** (`schedule` / `manual` / `production`), status, counts, commits new/pruned, API calls, duration |
 | `recent_issues` | last 25 repository outcomes that were **not** `complete`, with the verbatim error |
 | `slowest_repositories` | per repository over 7 days: slowest `duration_ms`, commits, times fetched |
 | `health` | last run age and status, repository/commit/pending/archived counts, whether the run lease is held, migrations applied |
