@@ -56,6 +56,14 @@ def check(path):
     wf = json.loads(Path(path).read_text())
     nodes = {n["name"]: n for n in wf.get("nodes", [])}
 
+    # 0. an import upserts by id. A file without one is created as a NEW workflow every time,
+    #    so edits silently land on a duplicate and the real one keeps running the old version.
+    if not wf.get("id"):
+        problems.append(
+            "workflow.json has no top-level \"id\": every import would create a new workflow "
+            "instead of updating this one"
+        )
+
     # 1. expressions referencing a missing node
     for node in wf.get("nodes", []):
         for text in walk_strings(node.get("parameters", {})):
