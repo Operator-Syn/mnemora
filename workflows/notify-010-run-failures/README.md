@@ -30,7 +30,7 @@ It reads no environment variables, so it has no `.env.example`.
 
 ## Nodes
 
-`On Workflow Failure` → `Build Failure Summary` → `Record Failure` (Postgres INSERT)
+`On Workflow Failure` → `Build Failure Summary` → `Record Failure` (INSERT) → `Release Lease` (DELETE)
 
 `Build Failure Summary` produces the normal `run_summary` shape, with two deliberate differences:
 
@@ -39,6 +39,22 @@ It reads no environment variables, so it has no `.env.example`.
   "looked at nothing and found nothing", which is a different and misleading fact.
 
 `note` carries `failed in node "<name>": <message>`.
+
+`Release Lease` deletes the failed run's **own** lease:
+
+```sql
+delete from mnemora_run_lock where lock_name = 'collector' and run_id = '<this execution>';
+```
+
+Without it, one failure costs far more than one run. A run that dies never reaches `Release Run Lock`,
+so its lease is held until the 900 s TTL expires, and every tick inside that window is refused with
+`another run holds the lease (run N, expires ...)`. Observed live: a single transient
+`getaddrinfo EAI_AGAIN api.github.com` in `Collect` (run 1454) turned into three consecutive failures —
+1454 itself, then 1456 and 1458 refused for 15 minutes.
+
+The delete is scoped to `run_id` deliberately: if a *different* run holds the lease it is left alone,
+because that run may still be alive and working. Verified both ways — a foreign run_id deletes 0 rows,
+its own deletes 1.
 
 ## What you get
 
