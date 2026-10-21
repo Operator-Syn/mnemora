@@ -1,8 +1,7 @@
 # The collector reads its state from the database
 
-**Status:** implemented and demonstrated on 2026-10-21. Every acceptance condition passes except
-the overlap guard, which is deliberately not built and is documented as a known limitation
-rather than claimed as done.
+**Status:** implemented and demonstrated on 2026-10-21. Every acceptance condition passes, every
+milestone is closed by a demonstration, and nothing in this document is deferred.
 **Owner:** Yash. **Scope:** `collect-010-github-public-cache` only. `persist-010` is finished and verified.
 
 ## Why this exists
@@ -100,10 +99,12 @@ Exit: AC-6, AC-7, AC-11.
 **M5 — Hardening.** Read-only database role for the collector, execution timeout sized to a
 measured cold run, overlap guard so a schedule tick cannot start a second run mid-flight.
 Exit: AC-9, plus a measured timeout with headroom and a demonstrated rejection of a concurrent run.
-**Landed:** read-only role (`mnemora_reader`) and `executionTimeout: 900` against a 252 s cold run.
-**Not landed:** the overlap guard. Two concurrent runs would double the calls and interleave
-writes; the writes stay correct (idempotent, keyed by sha) but the calls are wasted. Recorded as
-a limitation in `docs/automation/workflows.md` rather than pretended away.
+**Landed:** read-only role (`mnemora_reader`); `executionTimeout: 900` against a 252 s cold run;
+and the overlap guard as a database lease (`mnemora_run_lock`, migration `0003`). The acquire is a
+single `INSERT ... ON CONFLICT DO UPDATE ... WHERE expired`, so two simultaneous runs cannot both
+win — a read-then-write would leave exactly the window the guard exists to close. The collector
+asks persist for the lease over the pipe and releases it when fetching finishes; a crashed run's
+lease expires on its own.
 
 **M6 — Documentation and honesty.** Update the walkthrough, the workflow README and the automation
 docs; correct the README status section.
@@ -200,6 +201,7 @@ valid, it is marked superseded with the reason.
 |---|---|---|---|---|
 | **AC-13** | 2026-10-21 | Timestamps from Postgres (`2026-10-18 01:09:49+00`) never equal GitHub's ISO strings (`2026-10-18T01:09:49Z`), so `reuse()` was always false and every "skipped" repository was silently re-fetched in full — 24 repositories, ~95 calls per run. | A warm run with unchanged upstream must report `skipped` for every repository and finish in seconds, not minutes. | passing (7 s, 24/24 skipped) |
 | **AC-14** | 2026-10-21 | Wiring a second branch to `main[1]` of a Code node orphaned the cache export: Code nodes have one output, so the export silently stopped running while the run reported success. | After any connectivity change, the cache export must be observed to run (status file mtime advances), not assumed. | passing |
+| **AC-16** | 2026-10-21 | Two runs started at once would crawl the same 24 repositories twice; the second one's work is wasted and can push a run into the quota reserve. | A run must refuse to start while another holds the lease: non-zero exit within seconds, the holder named, nothing written. | passing (refused in 5 s, holder named) |
 | **AC-15** | 2026-10-21 | Editing a workflow file does not deploy it. The persist fix for skipped records sat in `workflow.json` unpublished; the live version pruned all 6,993 commits when the collector sent its first skipped records. | Before running a producer against a consumer, assert the published version contains the guard, and prove it with a probe payload. | passing (gate probe: 0 pruned) |
 
 ## Implementation results (2026-10-21)
@@ -219,6 +221,7 @@ condition is not proven, it says so.
 | AC-8 | **passing** | persist unpublished → webhook 404, collector exit 1, `refreshed_at_utc` unchanged, 6,993 commits intact; after republishing, the next run succeeded in 7 s. |
 | AC-9 | **passing** | `mnemora_reader` reads 24 rows; `insert` → `permission denied for table mnemora_repositories`; `-d n8n` → `permission denied for database "n8n"`. |
 | AC-10 | **passing** | Product tables truncated, `public/` moved aside, run held a `pg_dump` safety net: 252 s later, **24 repositories / 6,993 commits** reproduced from GitHub alone, all 24 fetched in full. |
+| **AC-16** | **passing** | A second run is refused while one is in flight, within seconds, naming the holder, without touching the database. | Two real overlapping runs (the first forced into a 250 s full resync): the second exited 1 after 5 s with `another run holds the lease (run 487, expires ...)`. An externally held lease refused a run in 5 s too; releasing it restored an 8 s / 24-skipped run. |
 | AC-11 | **passing** | planted `Operator-Syn/ghost-test` with one commit; run archived it (`absent from owner public listing`), kept the commit, and a second run changed nothing. |
 | AC-12 | **passing** | `WALKTHROUGH.md` rewritten around the nine-node shape; workflow `README.md` and `docs/automation/workflows.md` updated, including a deploy section stating that importing is not publishing. |
 | AC-13 | **passing** | see the criteria table: 7 s warm run with 24/24 `skipped`. |
@@ -236,6 +239,9 @@ condition is not proven, it says so.
   `workflow_entity.activeVersionId` but left `workflow_published_version` pointing at the old
   version, and the webhook stayed unregistered. Publishing through the n8n MCP tool updated both
   and took effect immediately.
+- The first version of the lease SQL failed with `invalid reference to FROM-clause entry for table
+  "mnemora_run_lock"`: inside `ON CONFLICT DO UPDATE` the target must be named by its alias. Found
+  by running the statement directly against Postgres instead of guessing from a 500.
 
 ## Out of scope
 
