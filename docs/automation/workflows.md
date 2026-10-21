@@ -95,11 +95,12 @@ The main instance creates executions; **workers run them**. Anything a workflow 
 `workflows/collect-010-github-public-cache/workflow.json` — every 6 hours, plus on-demand:
 
 1. **Build Plan** reads `COLLECT_010_OWNERS`, `COLLECT_010_WINDOW_DAYS`, the optional token, and the fork/archived flags from the workflow's own `.env`.
-2. **Read Existing Cache** + **Extract Cached Records** load the files already on disk. The split is required, not decorative: n8n stores binary payloads in the database, so a Code node receives a reference rather than bytes, and `Extract From File` nests the parsed record under `json.data`.
-3. **Collect** lists every **public** repository of those owners through `/users/:owner/repos`, then decides per repository: `skipped` when `pushed_at` is unchanged (zero requests), `incremental` when it moved (only newer commits, merged and deduped by sha), `full` when there is no usable cache. A missing cached head means history was rewritten, so that repository falls back to `full`. `COLLECT_010_WINDOW_DAYS=0` means full history; a positive value keeps a rolling window.
-4. **To JSON File** emits one file per repository; **Write Public Cache** writes `public/github-public-cache__<owner>__<repo>.json`.
+2. **Read State** asks Postgres what is already collected, through the read-only `mnemora_reader` role: `repository_id`, `full_name`, `pushed_at_utc`, `commit_count`, `source_state`, `archived_at_utc` and languages per repository. This replaced the two file-reading nodes. The cache files are no longer an input, so deleting them changes nothing about what a run decides. An unreachable database fails the run rather than being read as "nothing collected".
+3. **Collect** lists every **public** repository of those owners through `/users/:owner/repos`, then decides per repository: `skipped` when `pushed_at` matches the database row (zero requests), `full` when it moved, is new, or the history mode changed. A repository is re-fetched in full rather than merged — the commits are rows now, and prune-on-complete removes what vanished after a rewrite. `COLLECT_010_WINDOW_DAYS=0` means full history.
+4. **Pipe Batches → Save to Pipe** posts one record per repository to the persist webhook at `http://n8n:5678/webhook/mnemora-commits`. If that fails after retries, the run fails: data that was collected and never stored must not report success.
+5. **To JSON File → Write Public Cache** writes the same records to `public/github-public-cache__<owner>__<repo>.json` as an **export**, and `collector-status.json` per run. Derived, replayable with `scripts/backfill.sh`, deletable.
 
-Measured: cold run 24 repos / 6,993 commits = 2 m 36 s and ~95 requests; warm run with nothing changed = **7.7 s**; one changed repo = 9.3 s.
+Measured: cold start with an empty database and empty cache = 24 repositories / 6,993 commits in **4 m 12 s**, ~95 requests; warm run with nothing changed = **7 s**, 24/24 `skipped`, zero commit requests.
 
 Scope is every public repository, discovered — not a hand-maintained allowlist. The public listing endpoint never returns private repositories, so private work is unreachable by construction. A repository made public enters the cache within one run, with no config change.
 
@@ -129,7 +130,42 @@ Two honest labels are deliberate and should not be "fixed":
 
 ## Not done yet
 
-- `active` is `false`. The schedule does not fire until the workflow is activated, which starts recurring outbound collection and should be an explicit decision.
-- No GitHub App or token, so collection is rate-limited and public-only.
-- No pagination beyond the first 100 commits; no retry/backoff for `202 Accepted` statistics endpoints.
-- Nothing reads the cache yet; the dashboard is unbuilt.
+- `active` is `false`. The schedule does not fire until the workflow is published and active, which starts recurring outbound collection and should be an explicit decision.
+- **Nothing prunes or archives yet at the workflow level** — that is `persist-010`'s job, and it is implemented: prune only on complete records, archive vanished repositories rather than deleting them.
+- No overlap guard: a schedule tick during a manual run would fetch twice. Writes stay correct (idempotent, keyed by sha), but the calls are wasted. `executionTimeout` is set to 900 s against a measured 252 s cold run.
+- A GitHub token exists and is required in practice: anonymous access is 60 requests/hour, which one cold run exceeds.
+- Commit pagination runs to the end of history (`COLLECT_010_MAX_COMMIT_PAGES` caps it; hitting the cap marks the record `partial`). No retry/backoff for `202 Accepted` statistics endpoints.
+- The dashboard is unbuilt. The database it will read is populated and verified.
+
+## Deploying a workflow change
+
+Importing a file is not deploying it. n8n 2.x separates a **draft** from a **published version**:
+a draft runs when you click "Execute workflow", but only a published version fires schedules and
+answers webhooks. Importing *deactivates* the workflow, and an inactive webhook returns `404` with
+`The requested webhook "POST ..." is not registered` — which reads like a wrong URL rather than an
+undeployed workflow.
+
+```
+edit workflows/<name>/workflow.json
+./scripts/workflows.sh import          # draft only; publishing is still required
+publish                                # required for any trigger to fire
+probe the trigger                      # a 200, not an assumption
+```
+
+To publish from the n8n MCP connection: enable **MCP access** on the workflow (Settings), then call
+`publish_workflow`. Each workflow records `availableInMCP: true` in its own `workflow.json`
+settings, so a re-import keeps that enabled.
+
+**Do not use `n8n publish:workflow` from the CLI.** It updates `workflow_entity.activeVersionId`
+but leaves `workflow_published_version` pointing at the previous version, and the webhook stays
+unregistered while the database looks correct. Publishing through the MCP tool updates both tables
+and takes effect immediately.
+
+Verify, do not assume:
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  -H 'Content-Type: application/json' -d '{}' \
+  http://127.0.0.1:5680/webhook/mnemora-commits
+# 500 = the workflow ran and rejected an empty payload. 404 = not published.
+```
