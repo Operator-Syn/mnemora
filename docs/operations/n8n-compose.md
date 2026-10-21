@@ -77,6 +77,32 @@ settled here, each pinned in `compose.yaml` and overridable per deployment from 
 Also fixed while here: `WEBHOOK_URL` was the deprecated name and warned on every boot. It is now
 `N8N_WEBHOOK_URL`. After the change the boot log reports **no** deprecation lines.
 
+### Compression, and how this stays true after today
+
+No workflow uses a Compression node today. That is a fact about the current files, not a property
+of the deployment, so the ceiling is enforced rather than remembered:
+
+- `N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES=268435456` and
+  `N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES=1000` are pinned in `.env`, with the same values as
+  fallbacks in `compose.yaml`. An upgrade cannot move them; raising them is a deliberate edit.
+- `scripts/check-instance-env.py` reads the **rendered** compose configuration — what the container
+  will actually receive, not what `.env` appears to say — and refuses the deployment if a pinned
+  value is missing or below what the collector needs.
+- If a Compression node is ever added, that check requires it to record, in its own Notes, the
+  largest payload it must handle. A node that genuinely needs 2 GiB then says so in the workflow
+  where the requirement lives, instead of failing at 256 MiB in production with nobody able to tell
+  what it used to accept.
+- `./scripts/workflows.sh check` runs both gates; `import` runs them too and will not deploy a
+  workflow that fails either.
+
+Demonstrated, not asserted:
+
+| scenario | result |
+|---|---|
+| Compression node with no Notes contract | `FAIL … node 'Compress Backup' is a Compression node with no size contract` |
+| same node with the payload size recorded | `ok … compression nodes: 1`, plus a warning that it is running at the platform defaults |
+| `N8N_RUNNERS_TASK_TIMEOUT` lowered to 60 | `FAIL … is below 300 — the Collect node runs ~157 s in one task` |
+
 ### Deliberately not done
 
 `N8N_RUNNERS_MODE` is still the internal task runner. Moving to `external` requires running the
