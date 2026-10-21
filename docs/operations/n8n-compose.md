@@ -60,3 +60,39 @@ Verify before trusting it: compare row counts for `user`, `workflow_entity`, `us
 
 
 This is a starting topology, not a production sign-off. Review the chosen release versions, host capacity, backup/restore, proxy TLS and webhook URL configuration, and access controls before exposing it.
+
+## n8n 3.0 readiness
+
+n8n 3.0 ships a migration report with five instance-level breaking changes. All five are now
+settled here, each pinned in `compose.yaml` and overridable per deployment from `.env`.
+
+| reported change | why it mattered here | what was done |
+|---|---|---|
+| Code-node task timeout default 300 s → **60 s** | **This one would have broken real work.** `Collect` runs an entire history fetch inside a single Code task: 68–116 s on a capped cold start, 252 s for a full one. At 60 s the run is aborted mid-crawl, having spent the calls. | `N8N_RUNNERS_TASK_TIMEOUT=600`, above the longest measured run. |
+| Manual executions always run on workers; `OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS` removed | The variable was unset, so behaviour was implicit and 3.0 removes the choice. | Set to `true` explicitly — the same behaviour, stated rather than inherited. |
+| Unverified community packages disabled by default | No community package is installed. | `N8N_UNVERIFIED_PACKAGES_ENABLED=false`, explicit. |
+| Compression node limits lowered (2 GiB → 256 MiB, 5000 → 1000 entries) | No workflow uses a Compression node — verified by grep across `workflows/*/workflow.json`. | Pinned to the new ceilings, so a future workflow cannot be built against the old limits and then fail on upgrade. |
+| "Import from URL" removed from the editor | Never used; workflows are imported from the repository. | No action. |
+
+Also fixed while here: `WEBHOOK_URL` was the deprecated name and warned on every boot. It is now
+`N8N_WEBHOOK_URL`. After the change the boot log reports **no** deprecation lines.
+
+### Deliberately not done
+
+`N8N_RUNNERS_MODE` is still the internal task runner. Moving to `external` requires running the
+task-runner launcher as a separate process with a shared auth token — a real change to the
+deployment, not a setting, and there is no isolation requirement yet that justifies it.
+
+### How to confirm this on the running instance
+
+```sh
+# the values the process actually has, not the ones in the file
+docker compose exec -T n8n env | grep -E 'RUNNERS_TASK_TIMEOUT|OFFLOAD|UNVERIFIED|COMPRESSION'
+docker compose exec -T worker env | grep -E 'RUNNERS_TASK_TIMEOUT'
+
+# no deprecation warnings left on boot
+docker compose logs --since 5m n8n | grep -E ' - [A-Z_]+ ->' || echo 'none'
+```
+
+The timeout is not taken on trust: a full re-collection takes ~252 s in one Code task, and it
+completes, which a 60 s default would not allow.
