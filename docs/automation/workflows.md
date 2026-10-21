@@ -44,6 +44,36 @@ Rules that keep the two sides from diverging:
 - Each JSON file carries its own `id`. Without it, import creates a duplicate workflow instead of updating the existing one; `import` prints the database count so a duplicate is visible immediately.
 - Never edit the same workflow in the UI and in the JSON at once. The last import wins, silently.
 
+## Code lives in files, not in the JSON
+
+A JSON string cannot contain a real newline, so a Code node body or a SQL query in `workflow.json`
+becomes one escaped line — `collect.js` was 16,947 characters on a single line with `\n` throughout.
+It parses, and it is unreviewable: no syntax highlighting, no comment alignment, and a diff that is
+one line the length of the file.
+
+So the manifest holds a marker and the code sits beside it:
+
+```
+workflows/collect-010-github-public-cache/
+  workflow.json            "jsCode": "@file:code/collect.js"
+  code/collect.js            405 readable lines
+  sql/read-state.sql         the query, as SQL
+```
+
+| command | what it does |
+|---|---|
+| `./scripts/workflow_files.py build <dir>` | render markers into JSON (stdout, or `--out file`) |
+| `./scripts/workflow_files.py split <dir>` | extract code/SQL strings into `code/` and `sql/` |
+
+`import` builds first and imports the rendered file, so **n8n only ever receives generated JSON**;
+`export` splits whatever came back, so a UI edit lands in the code files rather than in an escaped
+line. The reference checker expands markers too, which is how `$('Node Name')` typos inside `code/*.js`
+are still caught before import.
+
+The round trip is verified, not assumed: after splitting, `build` must reproduce the previous
+`workflow.json` exactly. It did for all three workflows — the first attempt did not, because the
+split stripped a trailing newline, and the check caught it.
+
 ## Workflow configuration belongs to the workflow
 
 The root `.env` configures the **stack**: images, ports, secrets, timezone, worker concurrency. A workflow's own settings live next to it and reach the container through Compose's `env_file`, declared once as an anchor and shared by both executing services:
