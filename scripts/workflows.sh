@@ -52,7 +52,10 @@ case "${1:-}" in
     refs_rc=$?
     ./scripts/check-workflow-layout.py
     layout_rc=$?
-    [ "$env_rc" -eq 0 ] && [ "$refs_rc" -eq 0 ] && [ "$layout_rc" -eq 0 ]
+    # vendor patches - the one that silences the import-from-URL notice is only as good as its mount
+    ./scripts/check-n8n-overrides.py
+    overrides_rc=$?
+    [ "$env_rc" -eq 0 ] && [ "$refs_rc" -eq 0 ] && [ "$layout_rc" -eq 0 ] && [ "$overrides_rc" -eq 0 ]
     exit $?
     ;;
 
@@ -69,6 +72,10 @@ case "${1:-}" in
     }
     ./scripts/check-workflow-layout.py || {
       echo "refusing to import: fix the workflow layout above" >&2
+      exit 1
+    }
+    ./scripts/check-n8n-overrides.py || {
+      echo "refusing to import: the n8n vendor override is not intact" >&2
       exit 1
     }
     found=0
