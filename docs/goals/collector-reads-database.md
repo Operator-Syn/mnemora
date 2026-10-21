@@ -1,6 +1,7 @@
 # The collector reads its state from the database
 
-**Status:** proposed, not started. M0 (this document) is the only artifact.
+**Status:** implemented and demonstrated on 2026-10-21, except M5's overlap guard and AC-10's
+destructive cold-start run (see *Implementation results*).
 **Owner:** Yash. **Scope:** `collect-010-github-public-cache` only. `persist-010` is finished and verified.
 
 ## Why this exists
@@ -112,10 +113,12 @@ Exit: AC-12, and a final cold run from empty state recorded as the reference out
   merge; keeping the merge while state moves to the database means two reconciliation rules to
   get wrong. Full refetch of a changed repository is self-correcting, and pruning removes
   whatever disappeared. Incremental comes later, if the call count ever justifies it.
-- **D3 — Vanished repository: mark, then delete after 30 days.** *(Needs your nod.)* A repository
-  absent from the listing gets `source_state = 'missing'` and is excluded from the dashboard;
-  after 30 days of absence its row is deleted and commits cascade. Deleting immediately loses
-  history you may still want to show; keeping forever shows ghosts.
+- **D3 — Vanished repository: archived forever, never deleted.** *(Decided by the operator:
+  "deleted repos to be archived, not deleted completely ... so the commits are still in there as
+  like 'in memory of' state".)* A repository absent from its owner's listing gets
+  `archived_at_utc` + `archived_reason`; its row and every commit stay. Nothing ages out, so
+  there is no deletion path to get wrong. A repository that reappears is un-archived by the
+  next run that sees it. Migration `0002_archive_repositories`.
 - **D4 — `data_changed_at_utc` is owned by the persist workflow.** The collector stops sending a
   value that gets overwritten anyway. Single writer owns the derivation.
 - **D5 — Keep writing the cache files.** They stay as an export and as the recovery path
@@ -190,7 +193,44 @@ valid, it is marked superseded with the reason.
 
 | id | added | symptom found | criterion | status |
 |---|---|---|---|---|
-| — | — | none yet | — | — |
+| **AC-13** | 2026-10-21 | Timestamps from Postgres (`2026-10-18 01:09:49+00`) never equal GitHub's ISO strings (`2026-10-18T01:09:49Z`), so `reuse()` was always false and every "skipped" repository was silently re-fetched in full — 24 repositories, ~95 calls per run. | A warm run with unchanged upstream must report `skipped` for every repository and finish in seconds, not minutes. | passing (7 s, 24/24 skipped) |
+| **AC-14** | 2026-10-21 | Wiring a second branch to `main[1]` of a Code node orphaned the cache export: Code nodes have one output, so the export silently stopped running while the run reported success. | After any connectivity change, the cache export must be observed to run (status file mtime advances), not assumed. | passing |
+| **AC-15** | 2026-10-21 | Editing a workflow file does not deploy it. The persist fix for skipped records sat in `workflow.json` unpublished; the live version pruned all 6,993 commits when the collector sent its first skipped records. | Before running a producer against a consumer, assert the published version contains the guard, and prove it with a probe payload. | passing (gate probe: 0 pruned) |
+
+## Implementation results (2026-10-21)
+
+Every row below was read back from Postgres or from the workflow's own execution record. Where a
+condition is not proven, it says so.
+
+| id | result | evidence |
+|---|---|---|
+| AC-1 | **passing** | `public/` moved aside and recreated empty; run took 7 s, reported 24/24 `skipped`, commits unchanged. |
+| AC-2 | **passing** | warm run 7 s; 6,993 commits before and after. |
+| AC-3 | **passing** | `max(refreshed_at_utc)` advanced to the run's timestamp; `max(data_changed_at_utc)` stayed at 06:14:38. |
+| AC-4 | **passing** | `collector-status.json` for the run: `Counter({'skipped': 24})`. |
+| AC-5 | **passing** | records reached the database via `Save to Pipe` → `persist-010`; 54 persist executions recorded during testing. |
+| AC-6 | **passing** | complete record minus one commit → `commits_pruned: 1`, row gone. |
+| AC-7 | **passing** | partial record → `commits_pruned: 0`; the same payload that previously deleted a row now deletes nothing. |
+| AC-8 | **passing** | persist unpublished → webhook 404, collector exit 1, `refreshed_at_utc` unchanged, 6,993 commits intact; after republishing, the next run succeeded in 7 s. |
+| AC-9 | **passing** | `mnemora_reader` reads 24 rows; `insert` → `permission denied for table mnemora_repositories`; `-d n8n` → `permission denied for database "n8n"`. |
+| AC-10 | **not demonstrated** | Requires dropping the product database; deliberately not run in this session. `scripts/backfill.sh` makes it recoverable, and the empty-cache run (AC-1) covers half the claim. |
+| AC-11 | **passing** | planted `Operator-Syn/ghost-test` with one commit; run archived it (`absent from owner public listing`), kept the commit, and a second run changed nothing. |
+| AC-12 | **partial** | this document and `db/migrations` are current; `WALKTHROUGH.md`, the workflow `README.md` and `docs/automation/workflows.md` still describe the file-first design. |
+| AC-13 | **passing** | see the criteria table: 7 s warm run with 24/24 `skipped`. |
+| AC-14 | **passing** | export observed writing after the connection fix (status file mtime advanced). |
+| AC-15 | **passing** | gate probe returned `commits_pruned: 0` for a skipped-style record; 6,993 rows intact. |
+
+### What this cost, and what it taught
+
+- The rewire produced **one real data-loss event**: 6,993 commits were deleted when the collector's
+  first skipped records met an unpublished prune rule. Restored from the cache export in one
+  command. The export is not decoration; it is the undo button.
+- Two of the three new criteria (AC-13, AC-14) were invisible failures — the run reported success
+  while doing the wrong thing. Only reading the database and the file mtimes exposed them.
+- Attempted shortcut worth recording: publishing through the CLI (`n8n publish:workflow`) updated
+  `workflow_entity.activeVersionId` but left `workflow_published_version` pointing at the old
+  version, and the webhook stayed unregistered. Publishing through the n8n MCP tool updated both
+  and took effect immediately.
 
 ## Out of scope
 
