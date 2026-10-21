@@ -2,3 +2,5 @@
 .backups/
 workflows/*/.env
 .hermes/
+__pycache__/
+*.pyc
