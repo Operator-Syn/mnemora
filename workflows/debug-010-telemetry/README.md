@@ -36,6 +36,15 @@ TOKEN=$(grep '^MNEMORA_TELEMETRY_TOKEN=' .env | cut -d= -f2)
 curl -s -H "X-Mnemora-Token: $TOKEN" http://127.0.0.1:5680/webhook/mnemora-telemetry | jq .
 ```
 
+## Prerequisites
+
+| credential | type | used by |
+|---|---|---|
+| `Mnemora Telemetry` | `httpHeaderAuth` | the webhook: header `X-Mnemora-Token`, value in `.env` as `MNEMORA_TELEMETRY_TOKEN` |
+| `Mnemora DB (read-only)` | `postgres` | `Read Stats`: database `mnemora`, user `mnemora_reader` |
+
+Both are encrypted with `N8N_ENCRYPTION_KEY`; neither is in the repository.
+
 ## Authorization model
 
 - **The endpoint** is gated by a header token; no token, no query.
