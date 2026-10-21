@@ -261,7 +261,8 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "executionTimeout": 900
   },
   "active": false,
   "pinData": {},
