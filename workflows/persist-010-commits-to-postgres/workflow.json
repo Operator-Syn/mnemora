@@ -13,7 +13,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        0,
+        -220,
         0
       ],
       "webhookId": "mnemora-commits-in",
@@ -21,14 +21,14 @@
     },
     {
       "parameters": {
-        "jsCode": "// Accept three shapes so the same endpoint serves the collector and a human with curl:\n//   { \"repositories\": [ record, ... ], \"archived_repository_ids\": [ ... ] }\n//   [ record, ... ]\n//   record\n// A \"record\" is exactly what collect-010 writes to its cache file: repository_id, full_name,\n// pushed_at_utc, commit_count, source_state, refreshed_at_utc and commits[].\nconst isRecord = (v) => v && typeof v === 'object' && !Array.isArray(v) && v.repository_id != null;\n\nconst first = $input.first().json ?? {};\nconst body = first.body !== undefined ? first.body : first;\n\nlet repos;\nif (Array.isArray(body)) repos = body;\nelse if (Array.isArray(body.repositories)) repos = body.repositories;\nelse if (isRecord(body)) repos = [body];\nelse repos = [];\n\n// Repositories that no longer appear in the owner's public listing. They are archived by the\n// database, never deleted, so their commits stay as history.\nlet archived = [];\nif (body && Array.isArray(body.archived_repository_ids)) {\n  archived = body.archived_repository_ids\n    .map((v) => Number(v))\n    .filter((v) => Number.isFinite(v) && v > 0);\n}\n\nif (repos.length === 0 && archived.length === 0) {\n  throw new Error('persist: payload contains no repository records and no archived ids');\n}\nfor (const r of repos) {\n  if (!isRecord(r)) throw new Error('persist: a record is missing repository_id');\n  if (!r.full_name) throw new Error(`persist: repository ${r.repository_id} is missing full_name`);\n  if (r.commits !== undefined && !Array.isArray(r.commits)) {\n    throw new Error(`persist: ${r.full_name} has a non-array commits field`);\n  }\n  if (r.source_state && !['complete', 'partial', 'error', 'stale'].includes(r.source_state)) {\n    throw new Error(`persist: ${r.full_name} has unknown source_state \"${r.source_state}\"`);\n  }\n}\n\n// Base64 because n8n's Postgres node splits query parameters on commas, and commit\n// messages are full of them. Base64 has no comma, so the payload crosses intact.\nconst payload = JSON.stringify({ repositories: repos, archived_repository_ids: archived });\nconst payload_b64 = Buffer.from(payload, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    payload_b64,\n    repository_count: repos.length,\n    archived_count: archived.length,\n    commit_count: repos.reduce((n, r) => n + (r.commits ? r.commits.length : 0), 0),\n    payload_bytes: Buffer.byteLength(payload),\n  },\n}];"
+        "jsCode": "// Accept three shapes so the same endpoint serves the collector and a human with curl:\n//   { \"repositories\": [ record, ... ], \"archived_repository_ids\": [ ... ] }\n//   [ record, ... ]\n//   record\n// A \"record\" is exactly what collect-010 writes to its cache file: repository_id, full_name,\n// pushed_at_utc, commit_count, source_state, refreshed_at_utc and commits[].\nconst isRecord = (v) => v && typeof v === 'object' && !Array.isArray(v) && v.repository_id != null;\n\nconst first = $input.first().json ?? {};\nconst body = first.body !== undefined ? first.body : first;\n\nlet repos;\nif (Array.isArray(body)) repos = body;\nelse if (Array.isArray(body.repositories)) repos = body.repositories;\nelse if (isRecord(body)) repos = [body];\nelse repos = [];\n\n\n// A run-claim request asks for the single-run lease rather than carrying repository records.\n// It is passed through as-is (base64) and handled by its own branch.\nif (body && body.run_claim && typeof body.run_claim === 'object') {\n  const c = body.run_claim;\n  if (!['acquire', 'release'].includes(String(c.action))) {\n    throw new Error('persist: run_claim.action must be acquire or release');\n  }\n  if (!c.run_id) throw new Error('persist: run_claim.run_id is required');\n  return [{ json: {\n    is_run_claim: true,\n    payload_b64: Buffer.from(JSON.stringify({ run_claim: c }), 'utf8').toString('base64'),\n  }}];\n}\n\n// Repositories that no longer appear in the owner's public listing. They are archived by the\n// database, never deleted, so their commits stay as history.\nlet archived = [];\nif (body && Array.isArray(body.archived_repository_ids)) {\n  archived = body.archived_repository_ids\n    .map((v) => Number(v))\n    .filter((v) => Number.isFinite(v) && v > 0);\n}\n\nif (repos.length === 0 && archived.length === 0) {\n  throw new Error('persist: payload contains no repository records and no archived ids');\n}\nfor (const r of repos) {\n  if (!isRecord(r)) throw new Error('persist: a record is missing repository_id');\n  if (!r.full_name) throw new Error(`persist: repository ${r.repository_id} is missing full_name`);\n  if (r.commits !== undefined && !Array.isArray(r.commits)) {\n    throw new Error(`persist: ${r.full_name} has a non-array commits field`);\n  }\n  if (r.source_state && !['complete', 'partial', 'error', 'stale'].includes(r.source_state)) {\n    throw new Error(`persist: ${r.full_name} has unknown source_state \"${r.source_state}\"`);\n  }\n}\n\n// Base64 because n8n's Postgres node splits query parameters on commas, and commit\n// messages are full of them. Base64 has no comma, so the payload crosses intact.\nconst payload = JSON.stringify({ repositories: repos, archived_repository_ids: archived });\nconst payload_b64 = Buffer.from(payload, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    payload_b64,\n    repository_count: repos.length,\n    archived_count: archived.length,\n    commit_count: repos.reduce((n, r) => n + (r.commits ? r.commits.length : 0), 0),\n    payload_bytes: Buffer.byteLength(payload),\n  },\n}];"
       },
       "id": "a1f0c1a0-0002-4000-8000-000000000002",
       "name": "Validate Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        220,
+        0,
         0
       ],
       "notes": "Checks the shape before any SQL runs: a record must have repository_id and full_name, and commits must be an array if present. Accepts an optional archived_repository_ids list for repositories that vanished upstream. Fails loudly with the offending repository rather than half-writing a batch. Then base64-encodes the JSON, because the Postgres node splits query parameters on commas and commit messages contain them."
@@ -47,7 +47,7 @@
       "typeVersion": 2.7,
       "position": [
         440,
-        0
+        100
       ],
       "credentials": {
         "postgres": {
@@ -68,10 +68,68 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        660,
+        440,
         0
       ],
       "notes": "Returns the counts so the caller can verify what happened instead of assuming: repositories upserted, commits pruned, commits seen, commits new. The backfill uses these numbers to check itself."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Run lease. $1 = base64(utf8(json)) of { \"run_claim\": { action, run_id, workflow, ttl_seconds } }\n--\n-- acquire and release are one statement each because the acquire must be atomic: the conflict\n-- clause fires only when the existing lease has expired, so two simultaneous runs cannot both\n-- win. Reading first and then writing would leave exactly the window the claim exists to close.\nwith payload as (\n  select convert_from(decode($1, 'base64'), 'UTF8')::jsonb as j\n),\nreq as (\n  select j -> 'run_claim' as c from payload\n),\nreleased as (\n  delete from mnemora_run_lock\n   where lock_name = 'collector'\n     and (select c ->> 'action' from req) = 'release'\n     and run_id = (select c ->> 'run_id' from req)\n  returning run_id\n),\nacquired as (\n  insert into mnemora_run_lock as l (lock_name, run_id, workflow, started_at_utc, expires_at_utc)\n  select 'collector',\n         c ->> 'run_id',\n         c ->> 'workflow',\n         now(),\n         now() + make_interval(secs => coalesce((c ->> 'ttl_seconds')::int, 900))\n  from req\n  where (select c ->> 'action' from req) = 'acquire'\n  on conflict (lock_name) do update\n     set run_id = excluded.run_id,\n         workflow = excluded.workflow,\n         started_at_utc = excluded.started_at_utc,\n         expires_at_utc = excluded.expires_at_utc\n     where l.expires_at_utc < now()\n  returning run_id\n)\nselect\n  (select c ->> 'action' from req)                                        as action,\n  ((select count(*) from acquired) = 1)                                    as acquired,\n  ((select count(*) from released) = 1)                                    as released,\n  (select run_id from mnemora_run_lock where lock_name = 'collector')      as holder,\n  (select expires_at_utc from mnemora_run_lock where lock_name = 'collector') as holder_expires_at_utc;",
+        "options": {
+          "queryReplacement": "={{ $json.payload_b64 }}"
+        }
+      },
+      "id": "a1f0c1a0-0005-4000-8000-000000000005",
+      "name": "Run Claim",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        220,
+        -200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "TgDbIuhWsAv9mDzk",
+          "name": "Mnemora DB"
+        }
+      },
+      "notes": "The run lease: acquire or release the single-row claim that allows one collector run at a time. Atomic on purpose \u2014 INSERT ... ON CONFLICT DO UPDATE ... WHERE expired means two simultaneous runs cannot both acquire, which a read-then-write would allow. Lives here because this workflow is the only writer to the product database; the collector asks over the pipe and stays read-only."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-claim",
+              "leftValue": "={{ !!$json.is_run_claim }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f0c1a0-0006-4000-8000-000000000006",
+      "name": "Is Run Claim?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Two payload shapes arrive here: repository records and run-claim requests. Keeping them in one webhook means one pipe and one writer; the branch keeps each branch doing exactly one thing."
     }
   ],
   "connections": {
@@ -90,7 +148,36 @@
       "main": [
         [
           {
+            "node": "Is Run Claim?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Run Claim?": {
+      "main": [
+        [
+          {
+            "node": "Run Claim",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Save Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Claim": {
+      "main": [
+        [
+          {
+            "node": "Reply",
             "type": "main",
             "index": 0
           }
