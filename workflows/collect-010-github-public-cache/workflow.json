@@ -19,8 +19,8 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
-        -200,
-        200
+        0,
+        -200
       ],
       "notes": "START HERE TO RUN IT BY HAND.\n\nThis node does nothing automatically. It exists so a person (or the scripts/workflows.sh helper) can trigger the workflow on demand.\n\nThe scheduled start is the other node beside it. You need one of these because the n8n command line refuses to run a workflow whose only start is a schedule.",
       "notesInFlow": true
@@ -41,8 +41,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.4,
       "position": [
-        -200,
-        0
+        0,
+        20
       ],
       "notes": "THE AUTOMATIC START.\n\nn8n fires this every six hours once the workflow is ACTIVE. While it is inactive the schedule is dormant and only the manual start works.\n\nThis is also the switch that starts making outbound GitHub requests on its own, which is why activation is left as a deliberate decision rather than something that happens on import.",
       "notesInFlow": true
@@ -56,60 +56,25 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        20,
-        100
+        220,
+        0
       ],
       "notes": "READS THE SETTINGS BEFORE TOUCHING THE NETWORK.\n\nIt decides: which accounts to look at, how much history to fetch, whether forks and archived repositories count, and whether a GitHub token is available.\n\nIt sends nothing and fetches nothing. That is the point: a typo in .env fails here in under a second with a clear message, instead of halfway through a two-minute crawl.\n\nThe output is one small object describing the whole run.",
       "notesInFlow": true
     },
     {
       "parameters": {
-        "operation": "read",
-        "fileSelector": "/home/node/mnemora-data/public/*.json",
-        "options": {}
-      },
-      "id": "a1000000-0000-4000-8000-000000000011",
-      "name": "Read Existing Cache",
-      "type": "n8n-nodes-base.readWriteFile",
-      "typeVersion": 1.1,
-      "position": [
-        130,
-        100
-      ],
-      "onError": "continueRegularOutput",
-      "notes": "READS WHAT IS ALREADY CACHED, BEFORE COLLECTING.\n\nGrabs every existing cache file so the next step can compare 'what GitHub says now' against 'what we already have'.\n\nThis is what makes re-runs cheap: a repository whose pushed_at has not moved needs no requests at all.\n\n'Continue on error' is set on purpose \u2014 on the very first run there are no files to read, and that is not a failure.",
-      "notesInFlow": true
-    },
-    {
-      "parameters": {
-        "operation": "fromJson",
-        "binaryPropertyName": "data",
-        "options": {}
-      },
-      "id": "a1000000-0000-4000-8000-000000000012",
-      "name": "Extract Cached Records",
-      "type": "n8n-nodes-base.extractFromFile",
-      "typeVersion": 1.2,
-      "position": [
-        185,
-        100
-      ],
-      "notes": "TURNS THE FILES ON DISK BACK INTO RECORDS.\n\nThe previous node reads files as binary, and in n8n 2.x binary payloads live in the database, so a Code node receives a reference rather than bytes. This node uses n8n's own JSON extractor to parse each file properly.\n\nWithout it the collector sees an empty cache and re-fetches everything \u2014 which looks identical to 'there is no cache yet'.",
-      "notesInFlow": true
-    },
-    {
-      "parameters": {
-        "jsCode": "// Discovers every public repository of each configured owner and brings the cache up\n// to date, touching only what actually changed.\n//\n// Three collection modes per repository, cheapest first:\n//   skipped      - pushed_at is unchanged since the cached copy, so nothing is fetched\n//   incremental  - new commits only, via `since`, merged into the cached history\n//   full         - the whole history, for a repository with no usable cache\n//\n// A repository whose history was rewritten (force-push) fails the incremental check and\n// falls back to a full resync, so ghosts cannot accumulate.\nconst cfg = $('Build Plan').first().json;\nconst STATUS_FILE = 'collector-status.json';\nconst API = 'https://api.github.com';\nconst httpGet = this.helpers.httpRequest.bind(this.helpers);\n\n// Tracks GitHub's remaining quota from response headers so the run can stop early\n// instead of burning the last calls and then failing on every remaining repository.\nlet budget = null;\nasync function get(url, qs) {\n  const res = await httpGet({\n    url,\n    qs,\n    headers: cfg.headers,\n    json: true,\n    timeout: 30000,\n    returnFullResponse: true,\n  });\n  const h = res.headers || {};\n  const raw = h['x-ratelimit-remaining'] !== undefined ? h['x-ratelimit-remaining'] : h['X-RateLimit-Remaining'];\n  if (raw !== undefined && raw !== null && !Number.isNaN(Number(raw))) budget = Number(raw);\n  return res.body;\n}\n\n// --- previous cache, read from disk by the node before this one -----------------\nconst existing = {};\nfor (const item of $input.all()) {\n  // The node before this one turns each cache file into plain JSON. Reading the file's\n  // binary instead is a trap: n8n 2.x keeps binary payloads in the database and hands a\n  // Code node a reference (\"database\"), not the bytes, so any attempt to decode it in\n  // place fails and looks exactly like \"no cache exists\".\n  // Extract From File nests the parsed object under its destination key (json.data),\n  // so unwrap it before looking for cache_file.\n  const payload = item.json && item.json.data ? item.json.data : item.json;\n  const rec = payload && payload.cache_file ? payload : null;\n  // The status file is not a repository record; ignore it here.\n  if (rec && rec.cache_file !== STATUS_FILE) existing[rec.cache_file] = rec;\n}\n\n// --- discovery ----------------------------------------------------------------\nconst repos = [];\nfor (const owner of cfg.owners) {\n  for (let page = 1; page <= 20; page++) {\n    const batch = await get(`${API}/users/${owner}/repos`, { per_page: 100, page, sort: 'full_name' });\n    const list = Array.isArray(batch) ? batch : [];\n    for (const repo of list) {\n      if (repo.visibility !== 'public') continue;\n      if (repo.fork && !cfg.includeForks) continue;\n      if (repo.archived && !cfg.includeArchived) continue;\n      repos.push(repo);\n    }\n    if (list.length < 100) break;\n  }\n}\n\n// --- per repository -----------------------------------------------------------\nconst out = [];\nconst status = [];\nfor (const repo of repos) {\n  const fullName = repo.full_name;\n  const cacheFile = `github-public-cache__${String(fullName).toLowerCase().replace('/', '__')}.json`;\n  const prev = existing[cacheFile];\n  const nowIso = new Date().toISOString();\n\n  // 0. Out of quota: stop spending, keep whatever is already cached.\n  if (budget !== null && budget <= cfg.rateReserve) {\n    status.push({\n      cache_file: cacheFile,\n      full_name: fullName,\n      collection: 'deferred',\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: prev ? prev.data_changed_at_utc || prev.refreshed_at_utc : null,\n      commit_count: prev ? prev.commit_count : 0,\n      source_state: prev ? prev.source_state : 'error',\n      source_error: 'deferred: rate-limit reserve reached, cache left untouched',\n    });\n    continue;\n  }\n\n  const reuse = () =>\n    prev &&\n    prev.repository_id === repo.id &&\n    prev.history === cfg.history &&\n    prev.default_branch === repo.default_branch &&\n    prev.pushed_at_utc === repo.pushed_at &&\n    !cfg.forceFull;\n\n  // 1. Unchanged since the cached copy: fetch nothing at all.\n  if (reuse() && !prev.source_error) {\n    // Emit nothing: the data file is already correct, so it is not rewritten. Only the\n    // small status file records that this repository was checked.\n    status.push({\n      cache_file: cacheFile,\n      full_name: fullName,\n      collection: 'skipped',\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: prev.data_changed_at_utc || prev.refreshed_at_utc,\n      commit_count: prev.commit_count,\n      source_state: prev.source_state,\n      source_error: prev.source_error || null,\n    });\n    continue;\n  }\n\n  let languages = (prev && prev.languages_bytes) || {};\n  let commits = [];\n  let state = 'complete';\n  let error = null;\n  let pages = 0;\n  let mode = 'full';\n  let preserved = false;\n\n  try {\n    languages = (await get(`${API}/repos/${fullName}/languages`)) || languages;\n  } catch (e) {\n    state = 'partial';\n    error = `languages: ${e.message}`;\n  }\n\n  // Incremental is only valid when the previous copy covers the same history mode.\n  const canIncrement =\n    prev &&\n    !cfg.forceFull &&\n    prev.history === cfg.history &&\n    Array.isArray(prev.commits) &&\n    prev.commits.length > 0;\n\n  try {\n    if (canIncrement) {\n      mode = 'incremental';\n      // Overlap by an hour: author date and committer date can disagree, and a push\n      // can land commits slightly out of order. Duplicates are removed by sha below.\n      const newest = prev.commits.map((c) => c.committed_at_utc).filter(Boolean).sort().pop();\n      const since = new Date(new Date(newest).getTime() - 3600 * 1000).toISOString();\n      const fetched = [];\n      for (let page = 1; page <= cfg.maxCommitPages; page++) {\n        const raw = await get(`${API}/repos/${fullName}/commits`, { per_page: 100, page, since });\n        const list = Array.isArray(raw) ? raw : [];\n        pages = page;\n        fetched.push(...list.filter((c) => c && c.sha));\n        if (list.length < 100) break;\n      }\n      // Rewrite detection: the cached head must still exist upstream. If it does not,\n      // history was rewritten and a merge would keep commits GitHub no longer has.\n      const cachedHead = prev.commits[0] && prev.commits[0].sha;\n      const stillPresent = !cachedHead || fetched.some((c) => c.sha === cachedHead);\n      if (!stillPresent) {\n        mode = 'full';\n        state = 'partial';\n        error = 'history rewritten upstream; re-collected in full';\n        commits = [];\n      } else {\n        commits = fetched;\n      }\n    }\n\n    if (mode === 'full') {\n      for (let page = 1; page <= cfg.maxCommitPages; page++) {\n        const qs = { per_page: 100, page };\n        if (cfg.since) qs.since = cfg.since;\n        const raw = await get(`${API}/repos/${fullName}/commits`, qs);\n        const list = Array.isArray(raw) ? raw : [];\n        pages = page;\n        commits.push(...list.filter((c) => c && c.sha));\n        if (list.length < 100) break;\n        if (page === cfg.maxCommitPages) {\n          state = 'partial';\n          error = `commits: capped at ${cfg.maxCommitPages} pages (${commits.length} commits)`;\n        }\n      }\n    }\n  } catch (e) {\n    const empty = /empty/i.test(String(e.message || ''));\n    state = empty ? 'empty' : 'error';\n    error = `commits: ${e.message}`;\n    commits = [];\n    // Preserve last-known-good: a failed fetch must never replace real history with\n    // an empty list. The record is marked stale and the file is left on disk as-is.\n    if (prev && Array.isArray(prev.commits) && prev.commits.length) {\n      preserved = true;\n      state = 'stale';\n    }\n  }\n\n  const shape = (c) => ({\n    sha: c.sha,\n    html_url: c.html_url,\n    message: (c.commit && c.commit.message ? c.commit.message : '').split('\\n')[0],\n    author: {\n      login: c.author ? c.author.login : null,\n      name: c.commit && c.commit.author ? c.commit.author.name : null,\n      email: c.commit && c.commit.author ? c.commit.author.email : null,\n    },\n    authored_at_utc: c.commit && c.commit.author ? c.commit.author.date : null,\n    committed_at_utc: c.commit && c.commit.committer ? c.commit.committer.date : null,\n  });\n\n  // Merge: incremental results join the cached history, deduped by sha, newest first.\n  let detail;\n  if (mode === 'incremental' && prev && !error) {\n    const bySha = new Map();\n    for (const c of prev.commits) bySha.set(c.sha, c);\n    for (const c of commits) bySha.set(c.sha, shape(c));\n    detail = [...bySha.values()].sort((a, b) =>\n      String(b.committed_at_utc || '').localeCompare(String(a.committed_at_utc || '')),\n    );\n  } else {\n    detail = commits.map(shape);\n  }\n\n  const authored = detail.map((c) => c.authored_at_utc).filter(Boolean).sort();\n  const periodStart = authored.length ? authored[0] : (prev && prev.period_start_utc) || cfg.since;\n\n  if (preserved) {\n    status.push({\n      cache_file: cacheFile,\n      full_name: fullName,\n      collection: 'stale',\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: prev.data_changed_at_utc || prev.refreshed_at_utc,\n      commit_count: prev.commit_count,\n      source_state: state,\n      source_error: error,\n    });\n    continue;\n  }\n\n  out.push({\n    json: {\n      repository_id: repo.id,\n      full_name: fullName,\n      visibility: repo.visibility,\n      default_branch: repo.default_branch,\n      description: repo.description || null,\n      is_fork: !!repo.fork,\n      is_archived: !!repo.archived,\n      html_url: repo.html_url,\n      pushed_at_utc: repo.pushed_at,\n      languages_bytes: languages,\n      history: cfg.history,\n      period_start_utc: periodStart,\n      period_end_utc: cfg.until,\n      commit_pages_fetched: pages,\n      commit_count: detail.length,\n      commit_count_definition:\n        'Commits returned by the GitHub REST commits endpoint for the default branch, newest first; not an authored-contribution count.',\n      collection: mode,\n      source_state: state,\n      source_error: error,\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: nowIso,\n      cache_file: cacheFile,\n      commits: detail,\n    },\n  });\n\n  status.push({\n    cache_file: cacheFile,\n    full_name: fullName,\n    collection: mode,\n    refreshed_at_utc: nowIso,\n    data_changed_at_utc: nowIso,\n    commit_count: detail.length,\n    source_state: state,\n    source_error: error,\n  });\n}\n\n// One small file per run: which repositories were checked and when. Written every run so\n// the \"last checked\" signal survives without rewriting multi-hundred-kilobyte payloads.\nout.push({\n  json: {\n    generated_at_utc: new Date().toISOString(),\n    owners: cfg.owners,\n    history: cfg.history,\n    repository_count: status.length,\n    repositories: status.sort((a, b) => a.cache_file.localeCompare(b.cache_file)),\n    cache_file: STATUS_FILE,\n  },\n});\n\nreturn out;"
+        "jsCode": "// Discovers every public repository of each configured owner and brings the cache up\n// to date, touching only what actually changed.\n//\n// Three collection modes per repository, cheapest first:\n//   skipped      - pushed_at is unchanged since the cached copy, so nothing is fetched\n//   incremental  - new commits only, via `since`, merged into the cached history\n//   full         - the whole history, for a repository with no usable cache\n//\n// A repository whose history was rewritten (force-push) fails the incremental check and\n// falls back to a full resync, so ghosts cannot accumulate.\nconst cfg = $('Build Plan').first().json;\nconst STATUS_FILE = 'collector-status.json';\nconst API = 'https://api.github.com';\nconst httpGet = this.helpers.httpRequest.bind(this.helpers);\n\n// Tracks GitHub's remaining quota from response headers so the run can stop early\n// instead of burning the last calls and then failing on every remaining repository.\nlet budget = null;\nasync function get(url, qs) {\n  const res = await httpGet({\n    url,\n    qs,\n    headers: cfg.headers,\n    json: true,\n    timeout: 30000,\n    returnFullResponse: true,\n  });\n  const h = res.headers || {};\n  const raw = h['x-ratelimit-remaining'] !== undefined ? h['x-ratelimit-remaining'] : h['X-RateLimit-Remaining'];\n  if (raw !== undefined && raw !== null && !Number.isNaN(Number(raw))) budget = Number(raw);\n  return res.body;\n}\n\n// --- previous state, read from the database by the node before this one ------------\n// The database is the source of truth for \"what do we already have\". The cache files are an\n// export, not an input: moving or deleting them changes nothing about what this run decides.\n// A row's pushed_at_utc answers \"did this move since we last looked\", which is the whole\n// question the files used to answer.\nconst existing = {};\nconst known = [];\nfor (const item of $('Read State').all()) {\n  const row = item.json || {};\n  if (row.repository_id === undefined || row.repository_id === null || row.repository_id === '') continue;\n  known.push(row);\n  existing[String(row.full_name || '').toLowerCase()] = row;\n}\n\n// --- discovery ----------------------------------------------------------------\nconst repos = [];\n// Every id the listing returned, including forks and archived repositories that the filters\n// below drop. Archive detection compares against this, not against `repos`, or a filtered-out\n// fork would look like a repository that vanished upstream.\nconst listedIds = new Set();\nfor (const owner of cfg.owners) {\n  for (let page = 1; page <= 20; page++) {\n    const batch = await get(`${API}/users/${owner}/repos`, { per_page: 100, page, sort: 'full_name' });\n    const list = Array.isArray(batch) ? batch : [];\n    for (const repo of list) {\n      if (repo.id) listedIds.add(repo.id);\n      if (repo.visibility !== 'public') continue;\n      if (repo.fork && !cfg.includeForks) continue;\n      if (repo.archived && !cfg.includeArchived) continue;\n      repos.push(repo);\n    }\n    if (list.length < 100) break;\n  }\n}\n\n// --- per repository -----------------------------------------------------------\nconst out = [];\n// Records that must reach the database but must not touch the cache export: skipped\n// repositories (no commit list) and failed fetches (would replace good data with nothing).\n// Kept separate so the export branch's item order stays 1:1 with the files it writes.\nconst pipeOnly = [];\nconst status = [];\nfor (const repo of repos) {\n  const fullName = repo.full_name;\n  const cacheFile = `github-public-cache__${String(fullName).toLowerCase().replace('/', '__')}.json`;\n  const prev = existing[String(fullName).toLowerCase()] || null;\n  const nowIso = new Date().toISOString();\n\n  // 0. Out of quota: stop spending, keep whatever is already cached.\n  if (budget !== null && budget <= cfg.rateReserve) {\n    status.push({\n      cache_file: cacheFile,\n      full_name: fullName,\n      collection: 'deferred',\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: prev ? prev.data_changed_at_utc || prev.refreshed_at_utc : null,\n      commit_count: prev ? prev.commit_count : 0,\n      source_state: prev ? prev.source_state : 'error',\n      source_error: 'deferred: rate-limit reserve reached, cache left untouched',\n    });\n    continue;\n  }\n\n  // Compare instants, not strings: Postgres renders timestamptz as `2026-10-18 01:09:49+00`\n  // while GitHub sends `2026-10-18T01:09:49Z`. String comparison never matches, which quietly\n  // turned every \"skipped\" into a full refetch \u2014 24 repositories and ~95 API calls per run.\n  const sameInstant = (a, b) => {\n    if (a === null || a === undefined || b === null || b === undefined) return !a && !b;\n    const ta = new Date(a).getTime();\n    const tb = new Date(b).getTime();\n    if (Number.isNaN(ta) || Number.isNaN(tb)) return String(a) === String(b);\n    return ta === tb;\n  };\n  const reuse = () =>\n    prev &&\n    Number(prev.repository_id) === repo.id &&\n    prev.history === cfg.history &&\n    prev.default_branch === repo.default_branch &&\n    sameInstant(prev.pushed_at_utc, repo.pushed_at) &&\n    !cfg.forceFull;\n\n  // 1. Unchanged since the database was last refreshed: fetch nothing at all.\n  if (reuse() && !prev.source_error) {\n    // The record still goes to the pipeline, so refreshed_at_utc advances and the dashboard\n    // can show \"checked 2 minutes ago\" honestly. Two flags keep that safe and non-destructive:\n    //   commits_omitted    - the database must not prune rows for a list we never sent\n    //   skip_cache_write   - the cache export must not be replaced with a hollow record\n    let prevLanguages = prev.languages_bytes || {};\n    if (typeof prevLanguages === 'string') {\n      try { prevLanguages = JSON.parse(prevLanguages); } catch (e) { prevLanguages = {}; }\n    }\n    pipeOnly.push({\n      json: {\n        repository_id: repo.id,\n        full_name: fullName,\n        visibility: repo.visibility,\n        default_branch: repo.default_branch,\n        description: repo.description || null,\n        is_fork: !!repo.fork,\n        is_archived: !!repo.archived,\n        html_url: repo.html_url,\n        pushed_at_utc: repo.pushed_at,\n        languages_bytes: prevLanguages,\n        history: cfg.history,\n        commit_count: Number(prev.commit_count) || 0,\n        collection: 'skipped',\n        source_state: prev.source_state || 'complete',\n        source_error: prev.source_error || null,\n        refreshed_at_utc: nowIso,\n        commits_omitted: true,\n        skip_cache_write: true,\n        cache_file: cacheFile,\n      },\n    });\n    status.push({\n      cache_file: cacheFile,\n      full_name: fullName,\n      collection: 'skipped',\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: prev.data_changed_at_utc || prev.refreshed_at_utc,\n      commit_count: Number(prev.commit_count) || 0,\n      source_state: prev.source_state,\n      source_error: prev.source_error || null,\n    });\n    continue;\n  }\n\n  let languages = (prev && prev.languages_bytes) || {};\n  let commits = [];\n  let state = 'complete';\n  let error = null;\n  let pages = 0;\n  let mode = 'full';\n  let preserved = false;\n\n  try {\n    languages = (await get(`${API}/repos/${fullName}/languages`)) || languages;\n  } catch (e) {\n    state = 'partial';\n    error = `languages: ${e.message}`;\n  }\n\n  // Incremental is only valid when the previous copy covers the same history mode.\n  // D2 (operator decision): a changed repository is re-collected in full. Merging is no\n  // longer this node's job \u2014 the commits live as rows in the database, and prune-on-complete\n  // keeps that list honest after a history rewrite. Incremental `since` returns when the\n  // call budget justifies the extra reconciliation rule, not before.\n  const canIncrement = false;\n\n  try {\n    if (canIncrement) {\n      mode = 'incremental';\n      // Overlap by an hour: author date and committer date can disagree, and a push\n      // can land commits slightly out of order. Duplicates are removed by sha below.\n      const newest = prev.commits.map((c) => c.committed_at_utc).filter(Boolean).sort().pop();\n      const since = new Date(new Date(newest).getTime() - 3600 * 1000).toISOString();\n      const fetched = [];\n      for (let page = 1; page <= cfg.maxCommitPages; page++) {\n        const raw = await get(`${API}/repos/${fullName}/commits`, { per_page: 100, page, since });\n        const list = Array.isArray(raw) ? raw : [];\n        pages = page;\n        fetched.push(...list.filter((c) => c && c.sha));\n        if (list.length < 100) break;\n      }\n      // Rewrite detection: the cached head must still exist upstream. If it does not,\n      // history was rewritten and a merge would keep commits GitHub no longer has.\n      const cachedHead = prev.commits[0] && prev.commits[0].sha;\n      const stillPresent = !cachedHead || fetched.some((c) => c.sha === cachedHead);\n      if (!stillPresent) {\n        mode = 'full';\n        state = 'partial';\n        error = 'history rewritten upstream; re-collected in full';\n        commits = [];\n      } else {\n        commits = fetched;\n      }\n    }\n\n    if (mode === 'full') {\n      for (let page = 1; page <= cfg.maxCommitPages; page++) {\n        const qs = { per_page: 100, page };\n        if (cfg.since) qs.since = cfg.since;\n        const raw = await get(`${API}/repos/${fullName}/commits`, qs);\n        const list = Array.isArray(raw) ? raw : [];\n        pages = page;\n        commits.push(...list.filter((c) => c && c.sha));\n        if (list.length < 100) break;\n        if (page === cfg.maxCommitPages) {\n          state = 'partial';\n          error = `commits: capped at ${cfg.maxCommitPages} pages (${commits.length} commits)`;\n        }\n      }\n    }\n  } catch (e) {\n    const empty = /empty/i.test(String(e.message || ''));\n    state = empty ? 'empty' : 'error';\n    error = `commits: ${e.message}`;\n    commits = [];\n    // Preserve last-known-good: a failed fetch must never replace real history with\n    // an empty list. The record is marked stale and the file is left on disk as-is.\n    if (prev && Array.isArray(prev.commits) && prev.commits.length) {\n      preserved = true;\n      state = 'stale';\n    }\n  }\n\n  const shape = (c) => ({\n    sha: c.sha,\n    html_url: c.html_url,\n    message: (c.commit && c.commit.message ? c.commit.message : '').split('\\n')[0],\n    author: {\n      login: c.author ? c.author.login : null,\n      name: c.commit && c.commit.author ? c.commit.author.name : null,\n      email: c.commit && c.commit.author ? c.commit.author.email : null,\n    },\n    authored_at_utc: c.commit && c.commit.author ? c.commit.author.date : null,\n    committed_at_utc: c.commit && c.commit.committer ? c.commit.committer.date : null,\n  });\n\n  // Merge: incremental results join the cached history, deduped by sha, newest first.\n  let detail;\n  if (mode === 'incremental' && prev && !error) {\n    const bySha = new Map();\n    for (const c of prev.commits) bySha.set(c.sha, c);\n    for (const c of commits) bySha.set(c.sha, shape(c));\n    detail = [...bySha.values()].sort((a, b) =>\n      String(b.committed_at_utc || '').localeCompare(String(a.committed_at_utc || '')),\n    );\n  } else {\n    detail = commits.map(shape);\n  }\n\n  const authored = detail.map((c) => c.authored_at_utc).filter(Boolean).sort();\n  const periodStart = authored.length ? authored[0] : (prev && prev.period_start_utc) || cfg.since;\n\n  if (preserved) {\n    status.push({\n      cache_file: cacheFile,\n      full_name: fullName,\n      collection: 'stale',\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: prev.data_changed_at_utc || prev.refreshed_at_utc,\n      commit_count: prev.commit_count,\n      source_state: state,\n      source_error: error,\n    });\n    continue;\n  }\n\n  (state === 'error' || state === 'stale' ? pipeOnly : out).push({\n    json: {\n      repository_id: repo.id,\n      full_name: fullName,\n      visibility: repo.visibility,\n      default_branch: repo.default_branch,\n      description: repo.description || null,\n      is_fork: !!repo.fork,\n      is_archived: !!repo.archived,\n      html_url: repo.html_url,\n      pushed_at_utc: repo.pushed_at,\n      languages_bytes: languages,\n      history: cfg.history,\n      period_start_utc: periodStart,\n      period_end_utc: cfg.until,\n      commit_pages_fetched: pages,\n      commit_count: detail.length,\n      commit_count_definition:\n        'Commits returned by the GitHub REST commits endpoint for the default branch, newest first; not an authored-contribution count.',\n      collection: mode,\n      source_state: state,\n      source_error: error,\n      refreshed_at_utc: nowIso,\n      data_changed_at_utc: nowIso,\n      cache_file: cacheFile,\n      commits: detail,\n    },\n  });\n\n  status.push({\n    cache_file: cacheFile,\n    full_name: fullName,\n    collection: mode,\n    refreshed_at_utc: nowIso,\n    data_changed_at_utc: nowIso,\n    commit_count: detail.length,\n    source_state: state,\n    source_error: error,\n  });\n}\n\n// --- archived repositories ----------------------------------------------------\n// Rows we know about, under an owner we just listed, that the listing no longer contains.\n// They are archived by the database, never deleted, so their commits survive as history\n// (decision D3). Only live rows are sent: re-archiving an archived row is a no-op anyway.\nconst ownerPrefixes = cfg.owners.map((o) => String(o).toLowerCase() + '/');\nconst archivedIds = known\n  .filter((row) => !row.archived_at_utc)\n  .filter((row) => ownerPrefixes.some((prefix) => String(row.full_name || '').toLowerCase().startsWith(prefix)))\n  .filter((row) => !listedIds.has(Number(row.repository_id)))\n  .map((row) => Number(row.repository_id));\n\n// One small file per run: which repositories were checked and when. Written every run so\n// the \"last checked\" signal survives without rewriting multi-hundred-kilobyte payloads.\nout.push({\n  json: {\n    generated_at_utc: new Date().toISOString(),\n    owners: cfg.owners,\n    history: cfg.history,\n    repository_count: status.length,\n    repositories: status.sort((a, b) => a.cache_file.localeCompare(b.cache_file)),\n    archived_repository_ids: archivedIds,\n    pipe_only_records: pipeOnly.map((i) => i.json),\n    cache_file: STATUS_FILE,\n  },\n});\n\nreturn out;"
       },
       "id": "a1000000-0000-4000-8000-000000000010",
       "name": "Collect",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        240,
-        100
+        660,
+        0
       ],
-      "notes": "BRINGS THE CACHE UP TO DATE, TOUCHING ONLY WHAT CHANGED.\n\n1. Ask GitHub for every PUBLIC repository each account owns. The public listing cannot return private repositories, even with a token.\n2. Compare each one against the cached copy:\n   - pushed_at unchanged  -> fetch nothing, reuse the cache ('skipped')\n   - pushed_at moved      -> fetch only commits since the newest cached one, merge them ('incremental')\n   - no usable cache      -> fetch the whole history ('full')\n3. If a merge does not find the cached head commit upstream, history was rewritten (force-push) and the repository is re-collected in full instead of keeping commits GitHub no longer has.\n\nEvery record states which mode was used, so you can see why a run was cheap.",
+      "notes": "Decides, per repository, whether to fetch. Its input is now the database (Read State), not the cache files: pushed_at_utc from the row answers 'did this move'. Three outcomes: skipped (nothing fetched, record sent with commits_omitted so timestamps advance without deleting rows), full (changed or unknown repository, whole commit history), error (fetch failed, nothing sent that could prune). It also reports repositories that vanished from the listing so the database can archive them.",
       "notesInFlow": true
     },
     {
@@ -123,8 +88,8 @@
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
       "position": [
-        460,
-        100
+        880,
+        140
       ],
       "notes": "TURNS EACH RECORD INTO A FILE, IN MEMORY.\n\nOne file per repository, each containing a single plain JSON object. Nothing is written to disk yet \u2014 this step only produces the bytes the next node saves.",
       "notesInFlow": true
@@ -141,11 +106,74 @@
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1.1,
       "position": [
-        680,
-        100
+        1100,
+        140
       ],
       "notes": "SAVES THE FILES WHERE THE DASHBOARD WILL READ THEM.\n\nThe filename is not guessed here: it comes from a field the record already carries (cache_file), so a file can never disagree with its own contents.\n\nIn queue mode the WORKER container runs this, which is why the cache volume is mounted on the worker as well as the main instance \u2014 otherwise the files would vanish on restart.",
       "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select repository_id, full_name, pushed_at_utc, commit_count, source_state,\n       source_error, history, default_branch, data_changed_at_utc, archived_at_utc,\n       languages_bytes\nfrom mnemora_repositories\norder by full_name;",
+        "options": {}
+      },
+      "id": "b2a0c1a0-0005-4000-8000-000000000005",
+      "name": "Read State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "2e9YVERiyWeFthxi",
+          "name": "Mnemora DB (read-only)"
+        }
+      },
+      "alwaysOutputData": true,
+      "notes": "Replaces the two file-reading nodes. Reads what the database already knows about every repository \u2014 pushed_at_utc, commit_count, source_state, whether it was archived \u2014 using a read-only role that cannot write. An empty table here is a real cold start, not a missing cache. If this node fails the run stops: guessing 'no state' would re-fetch every repository and burn the API budget."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Routes Collect's output to the pipeline.\n//\n// One request per repository record \u2014 including skipped repositories, whose records carry no\n// commit list but still advance refreshed_at_utc. Plus a single request listing repositories\n// that vanished from the listing, so the database can archive them instead of deleting them.\n// The run-status item is not a database record and is dropped here; it still goes to the cache\n// export, where it belongs.\nconst out = [];\nlet archived = [];\nfor (const item of $('Collect').all()) {\n  const j = item.json || {};\n  if (j.repository_id !== undefined && j.repository_id !== null && j.repository_id !== '') {\n    out.push({ json: j });\n  } else {\n    // The run-status item carries two things the pipeline needs and the export does not:\n    // records that must not overwrite the cache (skipped, failed), and repositories that\n    // vanished upstream.\n    if (Array.isArray(j.pipe_only_records)) out.push(...j.pipe_only_records.map((r) => ({ json: r })));\n    if (Array.isArray(j.archived_repository_ids)) archived = j.archived_repository_ids;\n  }\n}\nif (archived.length) out.push({ json: { archived_repository_ids: archived } });\nreturn out;"
+      },
+      "id": "b2a0c1a0-0006-4000-8000-000000000006",
+      "name": "Pipe Batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -140
+      ],
+      "notes": "Separates 'what goes to the database' from 'what goes to the file export'. Every repository record is passed through unchanged; the archive list becomes one extra request; the run status is excluded because it is not a repository."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://n8n:5678/webhook/mnemora-commits",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "b2a0c1a0-0007-4000-8000-000000000007",
+      "name": "Save to Pipe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        -140
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000
+      },
+      "notes": "Hands each record to persist-010-commits-to-postgres. The URL is the compose-network address (service n8n, port 5678), not the browser's 5680 \u2014 inside a container 127.0.0.1 is the container itself. If this fails after retries the run fails loudly: a run that collected data but never stored it must not report success."
     }
   ],
   "connections": {
@@ -175,25 +203,14 @@
       "main": [
         [
           {
-            "node": "Read Existing Cache",
+            "node": "Read State",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Read Existing Cache": {
-      "main": [
-        [
-          {
-            "node": "Extract Cached Records",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Cached Records": {
+    "Read State": {
       "main": [
         [
           {
@@ -208,7 +225,23 @@
       "main": [
         [
           {
+            "node": "Pipe Batches",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "To JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pipe Batches": {
+      "main": [
+        [
+          {
+            "node": "Save to Pipe",
             "type": "main",
             "index": 0
           }
