@@ -130,7 +130,10 @@ Two honest labels are deliberate and should not be "fixed":
 
 ## Not done yet
 
-- `active` is `false`. The schedule does not fire until the workflow is published and active, which starts recurring outbound collection and should be an explicit decision.
+- **Published and active** (2026-10-21). The six-hour schedule fires on its own: verified by
+temporarily setting the interval to one minute, watching two `mode=trigger` executions fire exactly
+60 s apart, then restoring six hours — after which no further ticks occurred. Each tick costs one
+listing call when nothing moved, and writes a row to `mnemora_runs`.
 - **Nothing prunes or archives yet at the workflow level** — that is `persist-010`'s job, and it is implemented: prune only on complete records, archive vanished repositories rather than deleting them.
 - Overlap is guarded by a database lease: a second run fails within seconds, naming the holder, instead of crawling twice. `executionTimeout` is 900 s against a measured 252 s cold run.
 - A GitHub token exists and is required in practice: anonymous access is 60 requests/hour, which one cold run exceeds.
