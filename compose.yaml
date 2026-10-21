@@ -96,8 +96,24 @@ services:
       EXECUTIONS_DATA_PRUNE: "true"
       EXECUTIONS_DATA_MAX_AGE: ${EXECUTIONS_MAX_AGE_HOURS:-168}
       # n8n advertises this URL in OAuth/webhook metadata; a wrong value breaks MCP and webhooks.
-      WEBHOOK_URL: ${N8N_PUBLIC_URL:?Set N8N_PUBLIC_URL in .env}
+      # N8N_WEBHOOK_URL is the current name; WEBHOOK_URL is deprecated and warns on boot.
+      N8N_WEBHOOK_URL: ${N8N_PUBLIC_URL:?Set N8N_PUBLIC_URL in .env}
       N8N_EDITOR_BASE_URL: ${N8N_PUBLIC_URL:?Set N8N_PUBLIC_URL in .env}
+      # n8n 3.0 lowers the Code-node task timeout default from 300s to 60s. The collector's
+      # Collect node fetches an entire history inside one Code task and takes 68-116s on a cold
+      # start (252s before the per-run cap), so the 3.0 default would abort it mid-crawl. Pinned
+      # well above the longest measured run rather than inherited from a changing default.
+      N8N_RUNNERS_TASK_TIMEOUT: ${N8N_RUNNERS_TASK_TIMEOUT:-600}
+      # Deprecated when unset: 3.0 removes the variable and always routes manual executions to
+      # workers in queue mode. Setting it now makes that behaviour explicit today.
+      OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: ${OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS:-true}
+      # No community package is installed. Make 3.0's new default explicit instead of inherited.
+      N8N_UNVERIFIED_PACKAGES_ENABLED: ${N8N_UNVERIFIED_PACKAGES_ENABLED:-false}
+      # No workflow in this repository uses a Compression node (verified), and 3.0 lowers these
+      # ceilings. Pinned to the new limits so a future workflow cannot depend on the old ones and
+      # then fail silently on an upgrade.
+      N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: ${N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES:-268435456}
+      N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: ${N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES:-1000}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       # Read/Write Files is confined to an allowlist; the cache lives outside ~/.n8n.
       N8N_RESTRICT_FILE_ACCESS_TO: /home/node/mnemora-data
