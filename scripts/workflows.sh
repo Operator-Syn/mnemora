@@ -10,6 +10,9 @@
 #   ./scripts/workflows.sh import   # every workflows/*/workflow.json -> n8n
 #   ./scripts/workflows.sh export   # running n8n -> each workflow directory
 #   ./scripts/workflows.sh run <name-or-id>
+#   ./scripts/workflows.sh import-url <url> [--save <dir>] [--yes]
+#       The editor's "Import from URL" is removed in n8n 3.0; this is the replacement, and it
+#       inspects the workflow before importing rather than trusting the link.
 #
 # Export after editing in the UI, import after editing the JSON by hand.
 # Never edit both sides at once: the last one written wins.
@@ -92,6 +95,11 @@ case "${1:-}" in
       docker compose cp n8n:/tmp/wf-out.json "$f" >/dev/null < /dev/null
       echo "exported $id -> $f"
     done < <(workflow_files)
+    ;;
+
+  import-url)
+    shift
+    exec python3 scripts/import-from-url.py "$@"
     ;;
 
   run)
