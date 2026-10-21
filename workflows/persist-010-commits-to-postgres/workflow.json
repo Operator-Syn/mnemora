@@ -1,214 +1,13 @@
 {
-  "name": "persist-010-commits-to-postgres",
-  "nodes": [
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "mnemora-commits",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "a1f0c1a0-0001-4000-8000-000000000001",
-      "name": "Commits In (Webhook)",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
-      "position": [
-        -220,
-        60
-      ],
-      "webhookId": "mnemora-commits-in",
-      "notes": "Entry point of the pipe. Anything that has repository observations POSTs them here: the collector workflow, the backfill replay of cached JSON files, or you with curl. Unauthenticated by design for now \u2014 the stack binds 127.0.0.1 only. Before this is exposed on a network it needs header auth, because anything that can reach this URL can write rows."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Accept three shapes so the same endpoint serves the collector and a human with curl:\n//   { \"repositories\": [ record, ... ], \"archived_repository_ids\": [ ... ] }\n//   [ record, ... ]\n//   record\n// A \"record\" is exactly what collect-010 writes to its cache file: repository_id, full_name,\n// pushed_at_utc, commit_count, source_state, refreshed_at_utc and commits[].\nconst isRecord = (v) => v && typeof v === 'object' && !Array.isArray(v) && v.repository_id != null;\n\nconst first = $input.first().json ?? {};\nconst body = first.body !== undefined ? first.body : first;\n\nlet repos;\nif (Array.isArray(body)) repos = body;\nelse if (Array.isArray(body.repositories)) repos = body.repositories;\nelse if (isRecord(body)) repos = [body];\nelse repos = [];\n\n\n// A run-claim request asks for the single-run lease rather than carrying repository records.\n// It is passed through as-is (base64) and handled by its own branch.\nif (body && body.run_claim && typeof body.run_claim === 'object') {\n  const c = body.run_claim;\n  if (!['acquire', 'release'].includes(String(c.action))) {\n    throw new Error('persist: run_claim.action must be acquire or release');\n  }\n  if (!c.run_id) throw new Error('persist: run_claim.run_id is required');\n  return [{ json: {\n    is_run_claim: true,\n    payload_b64: Buffer.from(JSON.stringify({ run_claim: c }), 'utf8').toString('base64'),\n  }}];\n}\n\n// A run summary is the last thing a run sends: what it looked at and what the pipe reported\n// back. Handled by its own branch, because it writes a different table.\nif (body && body.run_summary && typeof body.run_summary === 'object') {\n  if (!body.run_summary.run_id) throw new Error('persist: run_summary.run_id is required');\n  return [{ json: {\n    is_run_summary: true,\n    payload_b64: Buffer.from(JSON.stringify({ run_summary: body.run_summary }), 'utf8').toString('base64'),\n  }}];\n}\n\n// Repositories that no longer appear in the owner's public listing. They are archived by the\n// database, never deleted, so their commits stay as history.\nlet archived = [];\nif (body && Array.isArray(body.archived_repository_ids)) {\n  archived = body.archived_repository_ids\n    .map((v) => Number(v))\n    .filter((v) => Number.isFinite(v) && v > 0);\n}\n\nif (repos.length === 0 && archived.length === 0) {\n  throw new Error('persist: payload contains no repository records and no archived ids');\n}\nfor (const r of repos) {\n  if (!isRecord(r)) throw new Error('persist: a record is missing repository_id');\n  if (!r.full_name) throw new Error(`persist: repository ${r.repository_id} is missing full_name`);\n  if (r.commits !== undefined && !Array.isArray(r.commits)) {\n    throw new Error(`persist: ${r.full_name} has a non-array commits field`);\n  }\n  if (r.source_state && !['complete', 'partial', 'error', 'stale', 'empty', 'pending'].includes(r.source_state)) {\n    throw new Error(`persist: ${r.full_name} has unknown source_state \"${r.source_state}\"`);\n  }\n}\n\n// Base64 because n8n's Postgres node splits query parameters on commas, and commit\n// messages are full of them. Base64 has no comma, so the payload crosses intact.\nconst payload = JSON.stringify({ repositories: repos, archived_repository_ids: archived });\nconst payload_b64 = Buffer.from(payload, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    payload_b64,\n    repository_count: repos.length,\n    archived_count: archived.length,\n    commit_count: repos.reduce((n, r) => n + (r.commits ? r.commits.length : 0), 0),\n    payload_bytes: Buffer.byteLength(payload),\n  },\n}];"
-      },
-      "id": "a1f0c1a0-0002-4000-8000-000000000002",
-      "name": "Validate Payload",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        0,
-        60
-      ],
-      "notes": "Checks the shape before any SQL runs. Four payloads arrive here: repository records, an archive list, run-claim requests and run summaries. Known states: complete, partial, error, stale, empty (no commits \u2014 GitHub 409) and pending (known, not yet collected). Only 'complete' records prune."
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "-- Persist one batch of repository observations. Atomic: one statement, one transaction.\n-- $1 = base64(utf8(json)) of:\n--   { \"repositories\": [ record, ... ], \"archived_repository_ids\": [ id, ... ] }\n--\n-- Two rules that protect data:\n--   1. PRUNE ONLY ON COMPLETE. A record whose source_state is not 'complete' has an\n--      incomplete commit list (rate limit, network, pagination stop). Pruning it would delete\n--      rows that were never fetched. Verification: AC-7.\n--   2. ARCHIVE, NEVER DELETE. A repository absent upstream gets archived_at_utc instead of\n--      being removed, so its commits survive as history (decision D3).\nwith payload as (\n  select convert_from(decode($1, 'base64'), 'UTF8')::jsonb as j\n),\nrepos as (\n  select r as rec,\n         (r ->> 'repository_id')::bigint as rid,\n         coalesce(r ->> 'source_state', '') as state\n  from payload, jsonb_array_elements(j -> 'repositories') as r\n),\narchived_ids as (\n  select v::bigint as rid\n  from payload, jsonb_array_elements_text(coalesce(j -> 'archived_repository_ids', '[]'::jsonb)) as v\n),\nupserted as (\n  insert into mnemora_repositories (\n    repository_id, full_name, visibility, default_branch, description, is_fork,\n    is_archived, html_url, pushed_at_utc, languages_bytes, history, commit_count,\n    source_state, source_error, data_changed_at_utc, refreshed_at_utc,\n    archived_at_utc, archived_reason)\n  select\n    rid,\n    rec ->> 'full_name',\n    coalesce(rec ->> 'visibility', 'public'),\n    rec ->> 'default_branch',\n    rec ->> 'description',\n    coalesce((rec ->> 'is_fork')::boolean, false),\n    coalesce((rec ->> 'is_archived')::boolean, false),\n    rec ->> 'html_url',\n    nullif(rec ->> 'pushed_at_utc', '')::timestamptz,\n    coalesce(rec -> 'languages_bytes', '{}'::jsonb),\n    rec ->> 'history',\n    coalesce((rec ->> 'commit_count')::integer, 0),\n    rec ->> 'source_state',\n    rec ->> 'source_error',\n    coalesce(nullif(rec ->> 'data_changed_at_utc', '')::timestamptz, now()),\n    coalesce(nullif(rec ->> 'refreshed_at_utc', '')::timestamptz, now()),\n    null, null\n  from repos\n  on conflict (repository_id) do update set\n    full_name = excluded.full_name,\n    visibility = excluded.visibility,\n    default_branch = excluded.default_branch,\n    description = excluded.description,\n    is_fork = excluded.is_fork,\n    is_archived = excluded.is_archived,\n    html_url = excluded.html_url,\n    pushed_at_utc = excluded.pushed_at_utc,\n    languages_bytes = excluded.languages_bytes,\n    history = excluded.history,\n    commit_count = excluded.commit_count,\n    source_state = excluded.source_state,\n    source_error = excluded.source_error,\n    -- Seen again => it is not vanished, so it is no longer archived.\n    archived_at_utc = null,\n    archived_reason = null,\n    data_changed_at_utc = case\n      when mnemora_repositories.pushed_at_utc is distinct from excluded.pushed_at_utc\n        or mnemora_repositories.commit_count is distinct from excluded.commit_count\n      then now()\n      else mnemora_repositories.data_changed_at_utc end,\n    refreshed_at_utc = excluded.refreshed_at_utc\n  returning repository_id\n),\narchived as (\n  update mnemora_repositories r\n     set archived_at_utc = coalesce(r.archived_at_utc, now()),\n         archived_reason  = coalesce(r.archived_reason, 'absent from owner public listing')\n    from archived_ids a\n   where r.repository_id = a.rid\n     and r.archived_at_utc is null\n     and not exists (select 1 from repos p where p.rid = a.rid)\n  returning r.repository_id\n),\nincoming as (\n  select r.rid, r.rec ->> 'full_name' as full_name, c as commit\n  from repos r, jsonb_array_elements(coalesce(r.rec -> 'commits', '[]'::jsonb)) as c\n  where c ->> 'sha' is not null\n),\n-- Prune only when this record claims to carry the complete commit list. Two ways a record\n-- can fail that: source_state is not 'complete' (fetch stopped early), or commits_omitted\n-- is true (a skipped repository, where the commit list was never sent at all and the\n-- database's existing rows are the truth).\nprunable as (\n  select rid from repos\n  where state = 'complete'\n    and coalesce((rec ->> 'commits_omitted')::boolean, false) = false\n),\npruned as (\n  delete from mnemora_commits mc\n  using prunable p\n  where mc.repository_id = p.rid\n    and not exists (\n      select 1 from incoming i\n      where i.rid = mc.repository_id and i.commit ->> 'sha' = mc.sha)\n  returning mc.sha\n),\nsaved as (\n  insert into mnemora_commits (\n    sha, repository_id, full_name, authored_at_utc, committed_at_utc, message,\n    author_login, author_name)\n  select\n    commit ->> 'sha', rid, full_name,\n    nullif(commit ->> 'authored_at_utc', '')::timestamptz,\n    nullif(commit ->> 'committed_at_utc', '')::timestamptz,\n    commit ->> 'message',\n    commit -> 'author' ->> 'login',\n    commit -> 'author' ->> 'name'\n  from incoming\n  on conflict (sha) do update set\n    last_seen_at_utc = now(),\n    full_name = excluded.full_name,\n    message = excluded.message,\n    author_login = excluded.author_login,\n    author_name = excluded.author_name\n  returning (xmax = 0) as is_new\n)\nselect\n  (select count(*) from upserted)::int           as repositories,\n  (select count(*) from archived)::int           as repositories_archived,\n  (select count(*) from pruned)::int             as commits_pruned,\n  (select count(*) from saved)::int              as commits_seen,\n  (select count(*) from saved where is_new)::int as commits_new;",
-        "options": {
-          "queryReplacement": "={{ $json.payload_b64 }}"
-        }
-      },
-      "id": "a1f0c1a0-0003-4000-8000-000000000003",
-      "name": "Save Batch",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
-      "position": [
-        440,
-        100
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "TgDbIuhWsAv9mDzk",
-          "name": "Mnemora DB"
-        }
-      },
-      "notes": "The only writer to the product database. One statement, one transaction: upsert repositories, archive repositories absent upstream (never delete them, so their commits survive as history), prune commits only for records that carry a complete and authoritative commit list, then upsert the rest. Two gates stop a partial or skipped record from deleting rows it never fetched: source_state must be 'complete', and commits_omitted must not be set."
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {}
-      },
-      "id": "a1f0c1a0-0004-4000-8000-000000000004",
-      "name": "Reply",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        440,
-        60
-      ],
-      "notes": "Returns the counts so the caller can verify what happened instead of assuming: repositories upserted, commits pruned, commits seen, commits new. The backfill uses these numbers to check itself."
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "-- Run lease. $1 = base64(utf8(json)) of { \"run_claim\": { action, run_id, workflow, ttl_seconds } }\n--\n-- acquire and release are one statement each because the acquire must be atomic: the conflict\n-- clause fires only when the existing lease has expired, so two simultaneous runs cannot both\n-- win. Reading first and then writing would leave exactly the window the claim exists to close.\nwith payload as (\n  select convert_from(decode($1, 'base64'), 'UTF8')::jsonb as j\n),\nreq as (\n  select j -> 'run_claim' as c from payload\n),\nreleased as (\n  delete from mnemora_run_lock\n   where lock_name = 'collector'\n     and (select c ->> 'action' from req) = 'release'\n     and run_id = (select c ->> 'run_id' from req)\n  returning run_id\n),\nacquired as (\n  insert into mnemora_run_lock as l (lock_name, run_id, workflow, started_at_utc, expires_at_utc)\n  select 'collector',\n         c ->> 'run_id',\n         c ->> 'workflow',\n         now(),\n         now() + make_interval(secs => coalesce((c ->> 'ttl_seconds')::int, 900))\n  from req\n  where (select c ->> 'action' from req) = 'acquire'\n  on conflict (lock_name) do update\n     set run_id = excluded.run_id,\n         workflow = excluded.workflow,\n         started_at_utc = excluded.started_at_utc,\n         expires_at_utc = excluded.expires_at_utc\n     where l.expires_at_utc < now()\n  returning run_id\n)\nselect\n  (select c ->> 'action' from req)                                        as action,\n  ((select count(*) from acquired) = 1)                                    as acquired,\n  ((select count(*) from released) = 1)                                    as released,\n  (select run_id from mnemora_run_lock where lock_name = 'collector')      as holder,\n  (select expires_at_utc from mnemora_run_lock where lock_name = 'collector') as holder_expires_at_utc;",
-        "options": {
-          "queryReplacement": "={{ $json.payload_b64 }}"
-        }
-      },
-      "id": "a1f0c1a0-0005-4000-8000-000000000005",
-      "name": "Run Claim",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
-      "position": [
-        220,
-        -200
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "TgDbIuhWsAv9mDzk",
-          "name": "Mnemora DB"
-        }
-      },
-      "notes": "The run lease: acquire or release the single-row claim that allows one collector run at a time. Atomic on purpose \u2014 INSERT ... ON CONFLICT DO UPDATE ... WHERE expired means two simultaneous runs cannot both acquire, which a read-then-write would allow. Lives here because this workflow is the only writer to the product database; the collector asks over the pipe and stays read-only."
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "is-claim",
-              "leftValue": "={{ !!$json.is_run_claim }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "a1f0c1a0-0006-4000-8000-000000000006",
-      "name": "Is Run Claim?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.4,
-      "position": [
-        0,
-        0
-      ],
-      "notes": "Two payload shapes arrive here: repository records and run-claim requests. Keeping them in one webhook means one pipe and one writer; the branch keeps each branch doing exactly one thing."
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "-- Run summary + per-repository telemetry. $1 = base64(utf8(json)) of { \"run_summary\": {...} }\n--\n-- Two writes in one statement: the run row, and one telemetry row per repository the run touched.\n-- Telemetry is what makes a finished run debuggable \u2014 which repository was slow, capped or failing \u2014\n-- because successful executions are not stored by n8n in this stack.\nwith payload as (\n  select convert_from(decode($1, 'base64'), 'UTF8')::jsonb as j\n),\nsummary as (\n  select j -> 'run_summary' as s from payload\n),\nsaved_run as (\n  insert into mnemora_runs (\n    run_id, workflow, started_at_utc, finished_at_utc, status,\n    repositories_total, repositories_fetched, repositories_skipped, repositories_pending,\n    repositories_failed, repositories_archived,\n    commits_seen, commits_new, commits_pruned, api_calls, note)\n  select\n    s ->> 'run_id',\n    coalesce(s ->> 'workflow', 'collect-010'),\n    nullif(s ->> 'started_at_utc', '')::timestamptz,\n    coalesce(nullif(s ->> 'finished_at_utc', '')::timestamptz, now()),\n    coalesce(s ->> 'status', 'success'),\n    (s ->> 'repositories_total')::int,\n    (s ->> 'repositories_fetched')::int,\n    (s ->> 'repositories_skipped')::int,\n    (s ->> 'repositories_pending')::int,\n    (s ->> 'repositories_failed')::int,\n    (s ->> 'repositories_archived')::int,\n    (s ->> 'commits_seen')::int,\n    (s ->> 'commits_new')::int,\n    (s ->> 'commits_pruned')::int,\n    (s ->> 'api_calls')::int,\n    s ->> 'note'\n  from summary\n  where s ->> 'run_id' is not null\n  on conflict (run_id) do update set\n    finished_at_utc       = excluded.finished_at_utc,\n    status                = excluded.status,\n    repositories_total    = excluded.repositories_total,\n    repositories_fetched  = excluded.repositories_fetched,\n    repositories_skipped  = excluded.repositories_skipped,\n    repositories_pending  = excluded.repositories_pending,\n    repositories_failed   = excluded.repositories_failed,\n    repositories_archived = excluded.repositories_archived,\n    commits_seen          = excluded.commits_seen,\n    commits_new           = excluded.commits_new,\n    commits_pruned        = excluded.commits_pruned,\n    api_calls             = excluded.api_calls,\n    note                  = excluded.note\n  returning run_id, status\n),\ntelemetry as (\n  insert into mnemora_telemetry (\n    run_id, workflow, kind, subject, status, source_state, commit_pages, commits, duration_ms, message)\n  select\n    s ->> 'run_id',\n    coalesce(s ->> 'workflow', 'collect-010'),\n    'repository',\n    t ->> 'full_name',\n    t ->> 'mode',\n    t ->> 'state',\n    nullif(t ->> 'pages', '')::int,\n    nullif(t ->> 'commits', '')::int,\n    nullif(t ->> 'ms', '')::int,\n    t ->> 'error'\n  from summary s\n  cross join lateral jsonb_array_elements(coalesce(s.s -> 'telemetry', '[]'::jsonb)) as t\n  where s ->> 'run_id' is not null\n  returning 1\n)\nselect\n  (select run_id from saved_run)            as run_id,\n  (select status from saved_run)            as status,\n  (select count(*) from telemetry)::int     as telemetry_rows;",
-        "options": {
-          "queryReplacement": "={{ $json.payload_b64 }}"
-        }
-      },
-      "id": "a1f0c1a0-0007-4000-8000-000000000007",
-      "name": "Save Run",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.7,
-      "position": [
-        220,
-        200
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "TgDbIuhWsAv9mDzk",
-          "name": "Mnemora DB"
-        }
-      },
-      "notes": "Records what a run did, and what happened to each repository inside it: one row in mnemora_runs, one row per repository in mnemora_telemetry. One statement, so a run can never appear in the run book without its detail. Telemetry exists because successful executions are not retained by n8n here \u2014 without it, a slow or capped repository leaves no trace once the run ends."
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "is-summary",
-              "leftValue": "={{ !!$json.is_run_summary }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "a1f0c1a0-0008-4000-8000-000000000008",
-      "name": "Is Run Summary?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.4,
-      "position": [
-        220,
-        60
-      ],
-      "notes": "Third payload shape on the same endpoint: repository records, run claims, and now run summaries. Each branch does exactly one write."
-    }
-  ],
+  "active": false,
   "connections": {
     "Commits In (Webhook)": {
       "main": [
         [
           {
+            "index": 0,
             "node": "Validate Payload",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validate Payload": {
-      "main": [
-        [
-          {
-            "node": "Is Run Claim?",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
@@ -217,16 +16,16 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Run Claim",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ],
         [
           {
+            "index": 0,
             "node": "Is Run Summary?",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
@@ -235,16 +34,16 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Save Run",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ],
         [
           {
+            "index": 0,
             "node": "Save Batch",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
@@ -253,20 +52,9 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Reply",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save Run": {
-      "main": [
-        [
-          {
-            "node": "Reply",
-            "type": "main",
-            "index": 0
+            "type": "main"
           }
         ]
       ]
@@ -275,18 +63,230 @@
       "main": [
         [
           {
+            "index": 0,
             "node": "Reply",
-            "type": "main",
-            "index": 0
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Save Run": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Reply",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Is Run Claim?",
+            "type": "main"
           }
         ]
       ]
     }
   },
+  "id": "NJ41NcmooiuniEuo",
+  "name": "persist-010-commits-to-postgres",
+  "nodes": [
+    {
+      "id": "a1f0c1a0-0001-4000-8000-000000000001",
+      "name": "Commits In (Webhook)",
+      "notes": "Entry point of the pipe. Anything that has repository observations POSTs them here: the collector workflow, the backfill replay of cached JSON files, or you with curl. Unauthenticated by design for now \u2014 the stack binds 127.0.0.1 only. Before this is exposed on a network it needs header auth, because anything that can reach this URL can write rows.",
+      "parameters": {
+        "httpMethod": "POST",
+        "options": {},
+        "path": "mnemora-commits",
+        "responseMode": "responseNode"
+      },
+      "position": [
+        -220,
+        60
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "mnemora-commits-in"
+    },
+    {
+      "id": "a1f0c1a0-0002-4000-8000-000000000002",
+      "name": "Validate Payload",
+      "notes": "Checks the shape before any SQL runs. Four payloads arrive here: repository records, an archive list, run-claim requests and run summaries. Known states: complete, partial, error, stale, empty (no commits \u2014 GitHub 409) and pending (known, not yet collected). Only 'complete' records prune.",
+      "parameters": {
+        "jsCode": "@file:code/validate-payload.js"
+      },
+      "position": [
+        0,
+        60
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "credentials": {
+        "postgres": {
+          "id": "TgDbIuhWsAv9mDzk",
+          "name": "Mnemora DB"
+        }
+      },
+      "id": "a1f0c1a0-0003-4000-8000-000000000003",
+      "name": "Save Batch",
+      "notes": "The only writer to the product database. One statement, one transaction: upsert repositories, archive repositories absent upstream (never delete them, so their commits survive as history), prune commits only for records that carry a complete and authoritative commit list, then upsert the rest. Two gates stop a partial or skipped record from deleting rows it never fetched: source_state must be 'complete', and commits_omitted must not be set.",
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ $json.payload_b64 }}"
+        },
+        "query": "@file:sql/save-batch.sql"
+      },
+      "position": [
+        440,
+        100
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
+    },
+    {
+      "id": "a1f0c1a0-0004-4000-8000-000000000004",
+      "name": "Reply",
+      "notes": "Returns the counts so the caller can verify what happened instead of assuming: repositories upserted, commits pruned, commits seen, commits new. The backfill uses these numbers to check itself.",
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "position": [
+        440,
+        60
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1
+    },
+    {
+      "credentials": {
+        "postgres": {
+          "id": "TgDbIuhWsAv9mDzk",
+          "name": "Mnemora DB"
+        }
+      },
+      "id": "a1f0c1a0-0005-4000-8000-000000000005",
+      "name": "Run Claim",
+      "notes": "The run lease: acquire or release the single-row claim that allows one collector run at a time. Atomic on purpose \u2014 INSERT ... ON CONFLICT DO UPDATE ... WHERE expired means two simultaneous runs cannot both acquire, which a read-then-write would allow. Lives here because this workflow is the only writer to the product database; the collector asks over the pipe and stays read-only.",
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ $json.payload_b64 }}"
+        },
+        "query": "@file:sql/run-claim.sql"
+      },
+      "position": [
+        220,
+        -200
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
+    },
+    {
+      "id": "a1f0c1a0-0006-4000-8000-000000000006",
+      "name": "Is Run Claim?",
+      "notes": "Two payload shapes arrive here: repository records and run-claim requests. Keeping them in one webhook means one pipe and one writer; the branch keeps each branch doing exactly one thing.",
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "is-claim",
+              "leftValue": "={{ !!$json.is_run_claim }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4
+    },
+    {
+      "credentials": {
+        "postgres": {
+          "id": "TgDbIuhWsAv9mDzk",
+          "name": "Mnemora DB"
+        }
+      },
+      "id": "a1f0c1a0-0007-4000-8000-000000000007",
+      "name": "Save Run",
+      "notes": "Records what a run did, and what happened to each repository inside it: one row in mnemora_runs, one row per repository in mnemora_telemetry. One statement, so a run can never appear in the run book without its detail. Telemetry exists because successful executions are not retained by n8n here \u2014 without it, a slow or capped repository leaves no trace once the run ends.",
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ $json.payload_b64 }}"
+        },
+        "query": "@file:sql/save-run.sql"
+      },
+      "position": [
+        220,
+        200
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
+    },
+    {
+      "id": "a1f0c1a0-0008-4000-8000-000000000008",
+      "name": "Is Run Summary?",
+      "notes": "Third payload shape on the same endpoint: repository records, run claims, and now run summaries. Each branch does exactly one write.",
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "is-summary",
+              "leftValue": "={{ !!$json.is_run_summary }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "position": [
+        220,
+        60
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4
+    }
+  ],
   "settings": {
-    "executionOrder": "v1",
-    "availableInMCP": true
-  },
-  "active": false,
-  "id": "NJ41NcmooiuniEuo"
+    "availableInMCP": true,
+    "executionOrder": "v1"
+  }
 }
