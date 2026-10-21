@@ -14,7 +14,7 @@ saved_run as (
     run_id, workflow, started_at_utc, finished_at_utc, status,
     repositories_total, repositories_fetched, repositories_skipped, repositories_pending,
     repositories_failed, repositories_archived,
-    commits_seen, commits_new, commits_pruned, api_calls, note)
+    commits_seen, commits_new, commits_pruned, api_calls, note, trigger_mode)
   select
     s ->> 'run_id',
     coalesce(s ->> 'workflow', 'collect-010'),
@@ -31,7 +31,8 @@ saved_run as (
     (s ->> 'commits_new')::int,
     (s ->> 'commits_pruned')::int,
     (s ->> 'api_calls')::int,
-    s ->> 'note'
+    s ->> 'note',
+    s ->> 'trigger_mode'
   from summary
   where s ->> 'run_id' is not null
   on conflict (run_id) do update set
@@ -47,7 +48,8 @@ saved_run as (
     commits_new           = excluded.commits_new,
     commits_pruned        = excluded.commits_pruned,
     api_calls             = excluded.api_calls,
-    note                  = excluded.note
+    note                  = excluded.note,
+    trigger_mode          = excluded.trigger_mode
   returning run_id, status
 ),
 telemetry as (
