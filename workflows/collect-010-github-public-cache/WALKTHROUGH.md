@@ -6,7 +6,7 @@ n8n canvas shows the same explanation in place.
 
 ## In one paragraph
 
-When you click run — or every six hours once activated — the workflow asks GitHub for the public
+When you click run — or every hour once activated — the workflow asks GitHub for the public
 repositories belonging to your account, reads each one's languages and commit history, and hands
 the result to `persist-010`, which is the only thing that writes to the database. The database is
 the product; a dashboard will read it. The workflow also writes one JSON file per repository, but
@@ -18,7 +18,7 @@ That is the whole job: **discover repositories, describe each one, hand them ove
 ```
   [Manual Run]  ─┐
                  ├─→ [Build Plan] → [Read State] → [Collect] ─┬─→ [Pipe Batches] → [Save to Pipe]
-  [Every 6 Hours]┘        │              │            │       │                         ↓
+  [Every Hour]┘        │              │            │       │                         ↓
                        settings      Postgres      GitHub     │                  persist-010
                                      (read-only)     API       └─→ [To JSON File] → [Write Public Cache]
 ```
@@ -38,7 +38,7 @@ wrong, and it cannot open n8n's own database at all.
 | start | when |
 |---|---|
 | **Manual Run** | you click "execute workflow" in n8n, or run `./scripts/workflows.sh run collect-010-github-public-cache` |
-| **Every 6 Hours** | on the clock, but only once the workflow is **published and active** |
+| **Every Hour** | on the clock, but only once the workflow is **published and active** |
 
 Nothing happens until one of these fires. Importing the workflow does not start it: it arrives
 inactive, because activation is the moment it begins making outbound requests on its own.
