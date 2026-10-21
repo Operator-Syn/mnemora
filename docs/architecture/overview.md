@@ -1,14 +1,35 @@
 # Architecture overview
 
-Status: conceptual. This describes boundaries, not a chosen framework or deployment.
+Status: partially decided. The service shape below is settled; the presentation layer is not.
+
+## Service shape (decided 2026-10-21)
+
+n8n is the backend. There is no application server, and the database is the product's data.
+
+- **PostgreSQL is the source of truth.** The dashboard reads rows, not files. The JSON cache
+  under the collector's volume is derived state, useful to the collector and disposable.
+- **One responsibility per workflow, connected by a pipe.** `collect-*` fetches from GitHub
+  and hands records over; `persist-*` writes records to the database and owns nothing else.
+  Each can be replaced without rewriting the other, and either can be run on its own.
+- **Committed observations are pruned.** A commit that no longer exists upstream is deleted
+  from the database rather than kept with a tombstone. The product shows what exists, not a
+  history of what once did.
+- **The collector reads its own state from the database.** "Which repositories already exist
+  and what was their last `pushed_at`" is a query, not a file lookup. Exactly one writer
+  (the persist workflow) and one reader (the collector) keeps them from drifting.
+
+The cost of this shape is that collection now depends on the database being reachable. A
+collector run without it cannot decide what to skip, and must fail rather than re-fetch
+everything blindly.
 
 ## Logical components
 
-1. **Presentation** — public dashboard for explicitly selected public repos; authenticated owner view for private aggregate metrics.
-2. **Application/API boundary** — enforces visibility and authorization before returning data. Private aggregates must not be accessible through a public endpoint.
-3. **Collector** — reads permitted GitHub data, handles pagination, rate limits, retries, delayed statistics, and refresh scheduling. n8n is one candidate for orchestration, not a requirement.
-4. **Cache/store** — persists only the minimum data needed for the views and separates public from private records/keys. Retention and encryption choices remain open.
-5. **Entitlement service (future, gated)** — maps verified billing state to time-bounded read access and revokes access at expiry. It must not be implemented until GitHub ownership model, payment provider, policies, and security have been reviewed.
+1. **Presentation** — public dashboard for selected public repos; authenticated owner view for private aggregate metrics. Not built. Reads the database.
+2. **Application/API boundary** — enforces visibility and authorization before returning data. Private aggregates must not be accessible through a public endpoint. In this shape the boundary is a database role plus whatever serves reads; it is not yet designed.
+3. **Collector workflow(s)** — read permitted GitHub data, handle pagination, rate limits, retries and refresh scheduling. n8n orchestration, one workflow per responsibility.
+4. **Persist workflow** — the only writer to the database. Takes records in, upserts rows, prunes what vanished.
+5. **Store** — PostgreSQL, with public and private records separated by rule and by role, not by directory.
+6. **Entitlement service (future, gated)** — maps verified billing state to time-bounded read access. Must not be implemented until ownership model, payment provider, policies and security have been reviewed.
 
 ## Data flow
 
@@ -31,7 +52,8 @@ The payment path is optional and deliberately separate from dashboard data colle
 ## Decisions still open
 
 - ~~Repository discovery vs owner-maintained allowlist~~ — **decided:** discovery of all public repositories via the public repository listing. An allowlist was considered and rejected as the v1 scope.
+- ~~Persistence technology~~ — **decided:** PostgreSQL is the source of truth and the dashboard reads it. Commits that disappear upstream are **pruned**, not tombstoned.
 - Static build plus server-side API, or fully dynamic application.
-- Persistence technology and retention periods.
+- What serves reads to the dashboard: a database role plus a thin API, or a static export generated from the database.
 - Whether any customer-facing private aggregate view is needed at all.
 - Whether paid access belongs in the initial product or a later, separately reviewed phase.
