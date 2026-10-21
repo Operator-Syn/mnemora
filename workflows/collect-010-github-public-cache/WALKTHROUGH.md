@@ -70,6 +70,23 @@ answers it directly — no file reading, no parsing, and no second source of tru
 An empty result means a genuine cold start. A failure stops the run: treating an unreachable
 database as "nothing collected" would re-fetch everything and burn the API budget.
 
+## Step 3b — Acquire Run Lock: one crawl at a time
+
+Before a single GitHub request, the run claims a lease in the database. If another run already
+holds it, this fails immediately with the holder's id and expiry:
+
+```
+collector: another run holds the lease (run 487, expires 2026-10-21T13:09:24Z).
+Refusing to duplicate the crawl.
+```
+
+The claim is atomic — one `INSERT ... ON CONFLICT DO UPDATE ... WHERE expired` — so two runs
+starting in the same second cannot both win. The lease is released as soon as fetching finishes,
+and expires by itself if a run dies, so a crash costs at most `COLLECT_010_RUN_LOCK_TTL_SECONDS`
+(900 s by default, well under the six-hour schedule and above a 252 s cold run).
+
+`COLLECT_010_RUN_LOCK=false` turns the whole thing off, deliberately.
+
 ## Step 4 — Collect: the actual work
 
 One pass, three movements.
