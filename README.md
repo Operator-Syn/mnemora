@@ -9,12 +9,30 @@ Mnemora is a proposed GitHub activity and repository-access project. Its dashboa
 - Possible paid feature: time-limited read access to selected private repositories, with the important limitation that revoking access cannot remove copies already cloned or downloaded.
 - Possible implementation role for n8n: scheduled collection and refresh, subject to a separate deployment and security review.
 
-Mnemora is currently a documentation scaffold. No application, payment flow, GitHub integration, or deployment has been implemented.
+## What exists today
+
+A working collection pipeline, not a product:
+
+- `compose.yaml` runs a self-hosted n8n (queue mode), PostgreSQL 18 and Redis, bound to loopback.
+- `workflows/collect-010-github-public-cache/` discovers **every public repository** of a configured account and caches its full commit history as one JSON file per repository, refreshing only what changed.
+- `scripts/workflows.sh` imports workflows from this repository into n8n, runs them on demand, and exports edits back.
+
+Still absent: the dashboard that reads the cache, any private-repository path, payments, and any deployment beyond a local machine. See [product overview](docs/product/overview.md) for scope and open decisions.
 
 ## Documentation
 
 Start at the [documentation index](docs/README.md). It organizes the product brief, requirements, architecture, GitHub data model, security/privacy guidance, operational considerations, and cited research.
 
-## Status
+The workflow itself has a plain-language [walkthrough](workflows/collect-010-github-public-cache/WALKTHROUGH.md), and every node carries notes visible in the n8n canvas.
 
-Concept and documentation only. See [product overview](docs/product/overview.md) for scope and decisions still to make.
+## Committing
+
+**One file per commit**, enforced by `.githooks/pre-commit`. A commit touching one path is reviewable, revertible and bisectable; a commit touching ten is a research project the next time something breaks.
+
+Enable the hook in a fresh clone — `.git/hooks` is not version controlled, so this is a one-time step per clone:
+
+```sh
+./scripts/setup-hooks.sh
+```
+
+A merge commit is exempt, and `git commit --no-verify` overrides deliberately.
