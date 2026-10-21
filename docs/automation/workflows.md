@@ -140,6 +140,27 @@ listing call when nothing moved, and writes a row to `mnemora_runs`.
 - Commit pagination runs to the end of history (`COLLECT_010_MAX_COMMIT_PAGES` caps it; hitting the cap marks the record `partial`). No retry/backoff for `202 Accepted` statistics endpoints.
 - The dashboard is unbuilt. The database it will read is populated and verified.
 
+## Telemetry, and how to read it
+
+Successful executions are not retained by n8n in this stack (`EXECUTIONS_DATA_SAVE_ON_SUCCESS=none`),
+so a run that behaved oddly leaves only its aggregate row. Two things fix that:
+
+- `mnemora_telemetry` — one row per repository per run: mode, state, pages fetched, commits,
+  `duration_ms`, and the verbatim `source_error`. Written by `persist-010` from the collector's own
+  report, in the same statement as the run row, so a run cannot appear without its detail.
+- `debug-010-telemetry` — an authenticated `GET /webhook/mnemora-telemetry` returning recent runs,
+  recent non-`complete` outcomes, the slowest repositories of the last seven days, and a health
+  block. `403` without the `X-Mnemora-Token` header; the query runs as `mnemora_reader`, which can
+  only `SELECT`.
+
+```sh
+TOKEN=$(grep '^MNEMORA_TELEMETRY_TOKEN=' .env | cut -d= -f2)
+curl -s -H "X-Mnemora-Token: $TOKEN" http://127.0.0.1:5680/webhook/mnemora-telemetry | jq .health
+```
+
+What to look at first when something is wrong: `health.last_run_age_seconds` (is it running at all?),
+`health.not_complete` (is anything stuck?), then `recent_issues` for the verbatim error.
+
 ## Deploying a workflow change
 
 Importing a file is not deploying it. n8n 2.x separates a **draft** from a **published version**:
