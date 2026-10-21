@@ -1,57 +1,72 @@
 # collect-010-github-public-cache
 
-Collects **every public repository** an account owns, with its **full commit history**,
-into the normalized cache, so a dashboard can read one stable shape instead of talking
-to GitHub itself.
+Collects **every public repository** an account owns, with its **full commit history**, and
+hands the records to `persist-010-commits-to-postgres`. The database is the product; a
+dashboard reads it instead of talking to GitHub itself.
 
 - **Schedule:** every 6 hours, plus on-demand via the `Manual Run` trigger.
-- **Writes:** `/home/node/mnemora-data/public/github-public-cache__<owner>__<repo>.json`,
-  one file per repository, **only when that repository's data changed**; plus
-  `public/collector-status.json` every run, which carries the per-repository last-checked
-  time. Both live on the `collector_data` volume, which is mounted on both services
-  because the worker executes the writes.
+- **Writes (product):** nothing directly. It POSTs records to the persist webhook, which owns
+  every write to `mnemora`.
+- **Reads (state):** `mnemora_repositories`, through a **read-only** role — what the database
+  knows is what the run decides from. The cache files are no longer consulted.
+- **Writes (export):** `/home/node/mnemora-data/public/github-public-cache__<owner>__<repo>.json`,
+  one file per repository, rewritten only when that repository's data changed; plus
+  `public/collector-status.json` every run. Derived: deleting these files changes nothing about
+  what the next run does. They exist for `scripts/backfill.sh` and for inspection.
 - **Contract:** `docs/architecture/github-data.md`.
 - **Config:** this directory's `.env` (see `.env.example`), injected by compose.
 
 ## Nodes
 
-`Manual Run` / `Every 6 Hours` → `Build Plan` → `Read Existing Cache` → `Extract Cached Records` → `Collect` → `To JSON File` → `Write Public Cache`
+`Manual Run` / `Every 6 Hours` → `Build Plan` → `Read State` → `Collect` → `Pipe Batches` → `Save to Pipe`
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Collect` → `To JSON File` → `Write Public Cache`
 
 `Build Plan` reads configuration; `Collect` does the work in one pass. They are separate
 so configuration failures are visible before any network call happens.
 
-`Read Existing Cache` + `Extract Cached Records` load what is already on disk so the
-collector can compare against it. The split is not decoration: n8n 2.x keeps binary
-payloads in the database, so a Code node is handed a reference rather than bytes, and
-n8n's own JSON extractor is the supported way to parse them. Extract nests each parsed
-record under `json.data`.
+`Read State` asks Postgres what is already collected — `pushed_at_utc` per repository — using
+the read-only credential. It replaced the two file-reading nodes: there is now one source of
+truth for "what do we have", and it is the same one the dashboard reads.
 
 `Collect` is one node rather than a chain of per-repository nodes on purpose: the earlier
 version read `$('Node').first()` in several places, which silently processed only the
 first repository and still reported `success`. A single pass over the discovered list
 cannot drop an entry without also failing.
 
-## Re-runs are cheap — three collection modes
+`Pipe Batches` splits database records from the export, passing skipped and failed records to
+the pipeline only — they must reach the database without overwriting a good cache file.
+
+`Save to Pipe` posts each record to `http://n8n:5678/webhook/mnemora-commits` (compose network,
+not the host's 5680). If it fails after retries the run fails: collected data that was never
+stored must not look like success.
+
+## Re-runs are cheap — two collection modes
 
 Every record says how it was produced, so a cheap run is visibly cheap:
 
 | mode | when | cost |
 |---|---|---|
-| `skipped` | the repository's `pushed_at` is unchanged since the cached copy | **zero requests** for it |
-| `incremental` | `pushed_at` moved; only commits newer than the cached head are fetched, then merged and deduped by sha | a page or two |
-| `full` | no usable cache, or the history mode changed, or `COLLECT_010_FORCE_FULL_RESYNC=true` | the whole history |
+| `skipped` | `pushed_at` in the database is unchanged, same branch, same history mode | **zero requests** for it |
+| `full` | new repository, moved repository, or `COLLECT_010_FORCE_FULL_RESYNC=true` | the whole history |
+
+A changed repository is re-fetched in full rather than merged: the commits live as rows now, and
+prune-on-complete removes what vanished upstream. Incremental `since` is switched off in this
+version so there is one reconciliation rule, not two.
 
 Measured on 24 repositories / 6,993 commits:
 
 | scenario | time | requests |
 |---|---|---|
-| cold cache (first run) | 2 m 36 s | ~95 |
-| warm cache, nothing changed | **7.7 s** | 1 listing call |
-| one repository changed | 9.3 s | listing + that repo only |
+| cold start (empty database, empty cache) | 4 m 12 s | ~95, all 24 fetched |
+| warm, nothing changed | **7 s** | 1 listing call, 24/24 `skipped` |
 
-**Rewrite detection:** before merging, the collector checks that the cached head commit
-still exists upstream. If it does not, history was rewritten (force-push) and that
-repository is re-collected in full instead of merging commits GitHub no longer has.
+**Pruning is gated on completeness.** Only a `complete` record may delete rows, and a record with
+`commits_omitted` may never. Skipped and partial records are how a run says "I did not fetch the
+full list" — treating them as authoritative once deleted all 6,993 commits.
+
+**History rewrites self-correct:** a repository re-fetched in full simply does not contain the
+rewritten-away commits, so prune removes them. Explicit head-comparison is no longer needed.
+
 
 ## Rate limits
 
