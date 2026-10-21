@@ -1,0 +1,118 @@
+{
+  "name": "persist-010-commits-to-postgres",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mnemora-commits",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1f0c1a0-0001-4000-8000-000000000001",
+      "name": "Commits In (Webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "mnemora-commits-in",
+      "notes": "Entry point of the pipe. Anything that has repository observations POSTs them here: the collector workflow, the backfill replay of cached JSON files, or you with curl. Unauthenticated by design for now \u2014 the stack binds 127.0.0.1 only. Before this is exposed on a network it needs header auth, because anything that can reach this URL can write rows."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Accept three shapes so the same endpoint serves the collector and a human with curl:\n//   { \"repositories\": [ record, ... ] }  <- the collector's batch\n//   [ record, ... ]\n//   record                               <- one repository\n// A \"record\" is exactly what collect-010 already writes to its cache file: repository_id,\n// full_name, pushed_at_utc, commit_count, source_state, refreshed_at_utc and commits[].\nconst isRecord = (v) => v && typeof v === 'object' && !Array.isArray(v) && v.repository_id != null;\n\nconst first = $input.first().json ?? {};\nconst body = first.body !== undefined ? first.body : first;\n\nlet repos;\nif (Array.isArray(body)) repos = body;\nelse if (Array.isArray(body.repositories)) repos = body.repositories;\nelse if (isRecord(body)) repos = [body];\nelse repos = [];\n\nif (repos.length === 0) {\n  throw new Error('persist: payload contains no repository records');\n}\nfor (const r of repos) {\n  if (!isRecord(r)) throw new Error('persist: a record is missing repository_id');\n  if (!r.full_name) throw new Error(`persist: repository ${r.repository_id} is missing full_name`);\n  if (r.commits !== undefined && !Array.isArray(r.commits)) {\n    throw new Error(`persist: ${r.full_name} has a non-array commits field`);\n  }\n}\n\n// Base64 because n8n's Postgres node splits query parameters on commas, and commit\n// messages are full of them. Base64 has no comma, so the payload crosses intact.\nconst payload = JSON.stringify({ repositories: repos });\nconst payload_b64 = Buffer.from(payload, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    payload_b64,\n    repository_count: repos.length,\n    commit_count: repos.reduce((n, r) => n + (r.commits ? r.commits.length : 0), 0),\n    payload_bytes: Buffer.byteLength(payload),\n  },\n}];"
+      },
+      "id": "a1f0c1a0-0002-4000-8000-000000000002",
+      "name": "Validate Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "notes": "Checks the shape before any SQL runs: a record must have repository_id and full_name, and commits must be an array if present. Fails loudly with the offending repository rather than half-writing a batch. Then base64-encodes the JSON, because the Postgres node splits query parameters on commas and commit messages contain them."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Persist one batch of repository observations. Atomic: one statement, one transaction.\n-- $1 = base64(utf8(json)) of {\"repositories\":[ record, ... ]}\n-- Idempotent: running the same payload twice changes nothing except last_seen/refreshed.\nwith payload as (\n  select convert_from(decode($1, 'base64'), 'UTF8')::jsonb as j\n),\nrepos as (\n  select r as rec, (r ->> 'repository_id')::bigint as rid\n  from payload, jsonb_array_elements(j -> 'repositories') as r\n),\nupserted as (\n  insert into mnemora_repositories (\n    repository_id, full_name, visibility, default_branch, description, is_fork,\n    is_archived, html_url, pushed_at_utc, languages_bytes, history, commit_count,\n    source_state, source_error, data_changed_at_utc, refreshed_at_utc)\n  select\n    rid,\n    rec ->> 'full_name',\n    coalesce(rec ->> 'visibility', 'public'),\n    rec ->> 'default_branch',\n    rec ->> 'description',\n    coalesce((rec ->> 'is_fork')::boolean, false),\n    coalesce((rec ->> 'is_archived')::boolean, false),\n    rec ->> 'html_url',\n    nullif(rec ->> 'pushed_at_utc', '')::timestamptz,\n    coalesce(rec -> 'languages_bytes', '{}'::jsonb),\n    rec ->> 'history',\n    coalesce((rec ->> 'commit_count')::integer, 0),\n    rec ->> 'source_state',\n    rec ->> 'source_error',\n    coalesce(nullif(rec ->> 'data_changed_at_utc', '')::timestamptz, now()),\n    coalesce(nullif(rec ->> 'refreshed_at_utc', '')::timestamptz, now())\n  from repos\n  on conflict (repository_id) do update set\n    full_name = excluded.full_name,\n    visibility = excluded.visibility,\n    default_branch = excluded.default_branch,\n    description = excluded.description,\n    is_fork = excluded.is_fork,\n    is_archived = excluded.is_archived,\n    html_url = excluded.html_url,\n    pushed_at_utc = excluded.pushed_at_utc,\n    languages_bytes = excluded.languages_bytes,\n    history = excluded.history,\n    commit_count = excluded.commit_count,\n    source_state = excluded.source_state,\n    source_error = excluded.source_error,\n    data_changed_at_utc = case\n      when mnemora_repositories.pushed_at_utc is distinct from excluded.pushed_at_utc\n        or mnemora_repositories.commit_count is distinct from excluded.commit_count\n      then now()\n      else mnemora_repositories.data_changed_at_utc end,\n    refreshed_at_utc = excluded.refreshed_at_utc\n  returning repository_id\n),\nincoming as (\n  select r.rid, r.rec ->> 'full_name' as full_name, c as commit\n  from repos r, jsonb_array_elements(coalesce(r.rec -> 'commits', '[]'::jsonb)) as c\n  where c ->> 'sha' is not null\n),\npruned as (\n  delete from mnemora_commits mc\n  using (select distinct rid from repos) p\n  where mc.repository_id = p.rid\n    and not exists (\n      select 1 from incoming i\n      where i.rid = mc.repository_id and i.commit ->> 'sha' = mc.sha)\n  returning mc.sha\n),\nsaved as (\n  insert into mnemora_commits (\n    sha, repository_id, full_name, authored_at_utc, committed_at_utc, message,\n    author_login, author_name)\n  select\n    commit ->> 'sha', rid, full_name,\n    nullif(commit ->> 'authored_at_utc', '')::timestamptz,\n    nullif(commit ->> 'committed_at_utc', '')::timestamptz,\n    commit ->> 'message',\n    commit -> 'author' ->> 'login',\n    commit -> 'author' ->> 'name'\n  from incoming\n  on conflict (sha) do update set\n    last_seen_at_utc = now(),\n    full_name = excluded.full_name,\n    message = excluded.message,\n    author_login = excluded.author_login,\n    author_name = excluded.author_name\n  returning (xmax = 0) as is_new\n)\nselect\n  (select count(*) from upserted)           as repositories,\n  (select count(*) from pruned)             as commits_pruned,\n  (select count(*) from saved)              as commits_seen,\n  (select count(*) from saved where is_new) as commits_new;",
+        "options": {
+          "queryReplacement": "={{ $json.payload_b64 }}"
+        }
+      },
+      "id": "a1f0c1a0-0003-4000-8000-000000000003",
+      "name": "Save Batch",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "TgDbIuhWsAv9mDzk",
+          "name": "Mnemora DB"
+        }
+      },
+      "notes": "The only writer to the product database. One statement, one transaction: upsert repositories, delete commits for those repositories that this payload did not contain (pruning), then upsert the commits it did contain. All three happen together or not at all, so a failed run cannot leave a repository with its commits deleted and none reinserted."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "a1f0c1a0-0004-4000-8000-000000000004",
+      "name": "Reply",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ],
+      "notes": "Returns the counts so the caller can verify what happened instead of assuming: repositories upserted, commits pruned, commits seen, commits new. The backfill uses these numbers to check itself."
+    }
+  ],
+  "connections": {
+    "Commits In (Webhook)": {
+      "main": [
+        [
+          {
+            "node": "Validate Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Payload": {
+      "main": [
+        [
+          {
+            "node": "Save Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Batch": {
+      "main": [
+        [
+          {
+            "node": "Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "active": false,
+  "id": "NJ41NcmooiuniEuo"
+}
