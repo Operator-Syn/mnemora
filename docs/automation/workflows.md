@@ -250,6 +250,28 @@ Refusing to import without --yes. Verify the source before granting this.
 time and the n8n id. The id matters: without it, every import creates a *new* workflow, which is how
 an edit can silently land on a duplicate while the real one keeps running the old version.
 
+## Importing disarms production, and that is not obvious
+
+`n8n import:workflow` writes a **draft** and **deactivates** the workflow it touches. Every import is
+therefore a small outage: schedules stop firing and webhooks answer `404`, with no error anywhere
+except the executions that quietly fail to happen.
+
+Four workflows were left disarmed by exactly this, twice in one evening — the pipe was down because
+`persist-010` was imported and never republished, and that surfaced as unrelated-looking failures.
+
+The CLI cannot fix it. `n8n publish:workflow` prints *"restart n8n for changes to take effect"* and a
+live instance keeps answering `404` afterwards (measured: unpublished → `404`, CLI republished →
+still `404`). Publishing is an editor/API action, so it is a human or agent step.
+
+Two guards now exist:
+
+- `./scripts/workflows.sh import` records what was armed before it ran and prints a **DISARMED** list
+  afterwards, naming each workflow and how to republish it;
+- `./scripts/workflows.sh status` shows `active` / `published` / verdict per workflow, and exits
+  non-zero if any is half-enabled (`armed`, `idle`, `BROKEN`).
+
+The rule: after any import, run `status` and make it say `armed` for everything that should be live.
+
 ## Deploying a workflow change
 
 Importing a file is not deploying it. n8n 2.x separates a **draft** from a **published version**:
