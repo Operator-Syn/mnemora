@@ -21,6 +21,7 @@ dashboard reads it instead of talking to GitHub itself.
 | what | value | why |
 |---|---|---|
 | credential `Mnemora DB (read-only)` (type `postgres`) | database `mnemora`, user `mnemora_reader` | `Read State` decides what to fetch; the role can `SELECT` only and cannot reach n8n's database |
+| credential `Mnemora Pipe` (type `httpHeaderAuth`) | header `X-Mnemora-Pipe-Token` | `Save to Pipe` must authenticate to `persist-010`, which answers `403` without it |
 | published + active | yes | the six-hour schedule only fires from a published version |
 | run lease | held by `persist-010` | a second concurrent run is refused instead of crawling twice |
 
