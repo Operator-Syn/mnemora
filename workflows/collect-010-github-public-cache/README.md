@@ -73,6 +73,23 @@ full list" — treating them as authoritative once deleted all 6,993 commits.
 rewritten-away commits, so prune removes them. Explicit head-comparison is no longer needed.
 
 
+## Cold start
+
+A first run against an empty database has nothing to compare against, so every repository is a
+full fetch. Left alone that is one burst — ~95 calls and four minutes for these 24 repositories,
+more for an account with deeper history — and an interruption leaves no record of what is still
+outstanding.
+
+`COLLECT_010_MAX_NEW_PER_RUN` (default 12) bounds it. Repositories past the cap are written to the
+database with `source_state = 'pending'` and no commit list, so:
+
+- they exist as rows, which means the dashboard can distinguish *not collected yet* from *empty*;
+- they are never pruned, because only `complete` records prune;
+- the next run treats `pending` exactly like a new repository and continues.
+
+A cold start of 24 repositories with a cap of 12 completes in two runs, and each run is safe to
+interrupt.
+
 ## Rate limits
 
 The cache reduces API calls **per repository**, not per commit inside one repository.
