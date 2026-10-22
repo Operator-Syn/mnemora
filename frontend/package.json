@@ -7,12 +7,13 @@
   },
   "scripts": {
     "dev": "vite dev --port 3000",
+    "dev:worker": "npm run build && wrangler dev -c dist/server/wrangler.json",
     "generate-routes": "tsr generate",
     "build": "vite build",
+    "postbuild": "node -e \"require('node:fs').rmSync('dist/server/.dev.vars', { force: true })\"",
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
-    "cf-typegen": "wrangler types",
-    "postbuild": "node -e \"require('node:fs').rmSync('dist/server/.dev.vars', { force: true })\""
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
