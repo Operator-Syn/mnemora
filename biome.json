@@ -1,0 +1,32 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "javascript": {
+    "globals": [
+      "$input",
+      "$json",
+      "$node",
+      "$workflow",
+      "$env",
+      "$execution",
+      "$now",
+      "$",
+      "$parameter",
+      "$items",
+      "$vars",
+      "$secrets",
+      "$getWorkflowStaticData"
+    ]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  }
+}
