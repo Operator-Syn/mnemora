@@ -100,7 +100,7 @@ for (const repo of repos) {
         repository_id: repo.id, full_name: fullName, visibility: repo.visibility,
         default_branch: repo.default_branch, description: repo.description || null,
         is_fork: !!repo.fork, is_archived: !!repo.archived, html_url: repo.html_url,
-        pushed_at_utc: repo.pushed_at, languages_bytes: (prev && prev.languages_bytes) || {},
+        pushed_at_utc: repo.pushed_at, languages_bytes: (prev?.languages_bytes) || {},
         history: cfg.history, commit_count: 0, collection: 'pending',
         source_state: 'pending',
         source_error: 'pending: cold-start budget reached, not yet collected',
@@ -159,7 +159,7 @@ for (const repo of repos) {
     //   skip_cache_write   - the cache export must not be replaced with a hollow record
     let prevLanguages = prev.languages_bytes || {};
     if (typeof prevLanguages === 'string') {
-      try { prevLanguages = JSON.parse(prevLanguages); } catch (e) { prevLanguages = {}; }
+      try { prevLanguages = JSON.parse(prevLanguages); } catch (_e) { prevLanguages = {}; }
     }
     pipeOnly.push({
       json: {
@@ -198,7 +198,7 @@ for (const repo of repos) {
     continue;
   }
 
-  let languages = (prev && prev.languages_bytes) || {};
+  let languages = (prev?.languages_bytes) || {};
   let commits = [];
   let state = 'complete';
   let error = null;
@@ -211,7 +211,7 @@ for (const repo of repos) {
   // budget could never finish: every run read pages 1..N, stopped at N, and marked itself partial
   // forever. The crawl id groups the runs of one crawl, so pruning can tell "seen earlier in this
   // crawl" from "not seen at all".
-  const openCrawl = !!(prev && prev.commit_crawl_id && Number(prev.commit_page_cursor) > 0);
+  const openCrawl = !!(prev?.commit_crawl_id && Number(prev.commit_page_cursor) > 0);
   const crawlId = openCrawl ? prev.commit_crawl_id : `${$execution.id || 'run'}-${repo.id}`;
   const crawlStartedAt = openCrawl && prev.commit_crawl_started_at_utc
     ? prev.commit_crawl_started_at_utc
@@ -247,12 +247,12 @@ for (const repo of repos) {
         const raw = await get(`${API}/repos/${fullName}/commits`, { per_page: 100, page, since });
         const list = Array.isArray(raw) ? raw : [];
         pages = page;
-        fetched.push(...list.filter((c) => c && c.sha));
+        fetched.push(...list.filter((c) => c?.sha));
         if (list.length < 100) break;
       }
       // Rewrite detection: the cached head must still exist upstream. If it does not,
       // history was rewritten and a merge would keep commits GitHub no longer has.
-      const cachedHead = prev.commits[0] && prev.commits[0].sha;
+      const cachedHead = prev.commits[0]?.sha;
       const stillPresent = !cachedHead || fetched.some((c) => c.sha === cachedHead);
       if (!stillPresent) {
         mode = 'full';
@@ -282,7 +282,7 @@ for (const repo of repos) {
         pagesThisRun++;
         pages = page;
         lastPage = page;
-        commits.push(...list.filter((c) => c && c.sha));
+        commits.push(...list.filter((c) => c?.sha));
         if (list.length < 100) {
           reachedEnd = true;
           break;
@@ -305,14 +305,14 @@ for (const repo of repos) {
   const shape = (c) => ({
     sha: c.sha,
     html_url: c.html_url,
-    message: (c.commit && c.commit.message ? c.commit.message : '').split('\n')[0],
+    message: (c.commit?.message ? c.commit.message : '').split('\n')[0],
     author: {
       login: c.author ? c.author.login : null,
-      name: c.commit && c.commit.author ? c.commit.author.name : null,
-      email: c.commit && c.commit.author ? c.commit.author.email : null,
+      name: c.commit?.author ? c.commit.author.name : null,
+      email: c.commit?.author ? c.commit.author.email : null,
     },
-    authored_at_utc: c.commit && c.commit.author ? c.commit.author.date : null,
-    committed_at_utc: c.commit && c.commit.committer ? c.commit.committer.date : null,
+    authored_at_utc: c.commit?.author ? c.commit.author.date : null,
+    committed_at_utc: c.commit?.committer ? c.commit.committer.date : null,
   });
 
   // Merge: incremental results join the cached history, deduped by sha, newest first.
@@ -329,7 +329,7 @@ for (const repo of repos) {
   }
 
   const authored = detail.map((c) => c.authored_at_utc).filter(Boolean).sort();
-  const periodStart = authored.length ? authored[0] : (prev && prev.period_start_utc) || cfg.since;
+  const periodStart = authored.length ? authored[0] : (prev?.period_start_utc) || cfg.since;
 
   if (preserved) {
     status.push({
@@ -362,8 +362,8 @@ for (const repo of repos) {
   // reports the count the database already holds, so the number never dips to "the pages I read
   // this hour".
   const commitTotal = crawlComplete
-    ? commits.length + Number((prev && prev.crawl_rows) || 0)
-    : Number((prev && prev.commit_count) || 0);
+    ? commits.length + Number((prev?.crawl_rows) || 0)
+    : Number((prev?.commit_count) || 0);
 
   (state === 'error' || state === 'stale' ? pipeOnly : out).push({
     json: {
@@ -418,7 +418,7 @@ for (const repo of repos) {
 // Rows we know about, under an owner we just listed, that the listing no longer contains.
 // They are archived by the database, never deleted, so their commits survive as history
 // (decision D3). Only live rows are sent: re-archiving an archived row is a no-op anyway.
-const ownerPrefixes = cfg.owners.map((o) => String(o).toLowerCase() + '/');
+const ownerPrefixes = cfg.owners.map((o) => `${String(o).toLowerCase()}/`);
 const archivedIds = known
   .filter((row) => !row.archived_at_utc)
   .filter((row) => ownerPrefixes.some((prefix) => String(row.full_name || '').toLowerCase().startsWith(prefix)))
