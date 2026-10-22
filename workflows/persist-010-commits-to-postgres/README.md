@@ -65,7 +65,11 @@ and commit messages contain them.
 
 ## Two rules that protect data
 
-1. **Prune only on complete.** A record prunes only when `source_state = 'complete'` **and**
+1. **Prune only on a finished crawl.** A record prunes on one of two grounds: a crawl that reached
+   the oldest commit (`commit_crawl_complete`), where the sweep deletes rows whose
+   `last_seen_crawl_id` is not this crawl — rows confirmed in an earlier run of the same crawl
+   survive, and so does anything the same batch is about to upsert; or a legacy one-shot full
+   payload (`source_state = 'complete'` **and**
    `commits_omitted` is absent. A partial fetch, a skipped repository, a pending one, an `empty`
    one — none may delete rows they never fetched. Breaking this once deleted all 6,993 commits.
 2. **Archive, never delete.** A repository absent upstream gets `archived_at_utc`; its row and every
