@@ -33,8 +33,8 @@ const res = await this.helpers.httpRequest({
 });
 
 if (!res || res.acquired !== true) {
-  const holder = res && res.holder ? res.holder : 'unknown';
-  const expires = res && res.holder_expires_at_utc ? res.holder_expires_at_utc : 'unknown';
+  const holder = res?.holder ? res.holder : 'unknown';
+  const expires = res?.holder_expires_at_utc ? res.holder_expires_at_utc : 'unknown';
   throw new Error(
     `collector: another run holds the lease (run ${holder}, expires ${expires}). ` +
       `Refusing to duplicate the crawl. Clear it with: ` +
