@@ -53,7 +53,7 @@ Any manual `curl` now needs the header too: `-H "X-Mnemora-Pipe-Token: $MNEMORA_
 
 | payload | branch | writes |
 |---|---|---|
-| `{ "repositories": [ record, ... ], "archived_repository_ids": [...] }` | `Save Batch` | upserts repositories, archives vanished ones, prunes commits **only** for `complete` records, upserts the rest |
+| `{ "repositories": [ record, ... ], "archived_repository_ids": [...] }` | `Save Batch` | upserts repositories (with their crawl cursor), archives vanished ones, prunes commits **only** for a finished crawl or a legacy full payload, upserts the rest |
 | `{ "run_claim": { action, run_id, ttl_seconds } }` | `Run Claim` | acquires/releases the single-run lease in `mnemora_run_lock` |
 | `{ "run_summary": { ... } }` | `Save Run` | one `mnemora_runs` row + one `mnemora_telemetry` row per repository, in one statement |
 | no valid shape | — | fails loudly; nothing is written |
