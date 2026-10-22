@@ -60,6 +60,15 @@ services:
   n8n:
     image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:?Set N8N_VERSION in .env}
     restart: unless-stopped
+    # Pinned resolvers. On a reboot the host's /etc/resolv.conf is not populated until NetBird
+    # comes up, and a container created in that window captures "no external nameservers" and stays
+    # broken until it is recreated — measured 2026-10-22, when two hourly runs failed with
+    # `getaddrinfo EAI_AGAIN api.github.com` after a reboot. NetBird's own DNS (10.17.237.238) is
+    # not reachable from inside the container network, so the durable answer is public resolvers;
+    # compose service names (postgres, redis, n8n) still resolve through Docker's embedded resolver.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     depends_on:
       postgres:
         condition: service_healthy
@@ -114,10 +123,14 @@ services:
       # then fail silently on an upgrade.
       N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: ${N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES:-268435456}
       N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: ${N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES:-1000}
-      # Code nodes cannot hold n8n credentials, so the pipe token reaches them as an env var.
-      # The HTTP nodes use the 'Mnemora Pipe' credential instead; this exists only for the three
-      # Code nodes that call the webhook directly (lease acquire/release, run summary).
+      # Code nodes cannot hold n8n credentials, so the pipe signing secret reaches them as an env var.
+      # Nothing transmits it: callers sign `ts.action.identity` with HMAC-SHA256 and persist verifies.
+      # The HTTP nodes no longer use the 'Mnemora Pipe' credential — the webhook takes a signature.
       MNEMORA_PIPE_TOKEN: ${MNEMORA_PIPE_TOKEN:?Set MNEMORA_PIPE_TOKEN in .env}
+      # Signing needs exactly one built-in module in the Code sandbox. Scoped deliberately: without
+      # this variable `require` is unavailable at all, and widening it to 'crypto,fs' would give every
+      # workflow filesystem access.
+      NODE_FUNCTION_ALLOW_BUILTIN: ${NODE_FUNCTION_ALLOW_BUILTIN:-crypto}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       # Read/Write Files is confined to an allowlist; the cache lives outside ~/.n8n.
       N8N_RESTRICT_FILE_ACCESS_TO: /home/node/mnemora-data
@@ -136,6 +149,11 @@ services:
   worker:
     image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:?Set N8N_VERSION in .env}
     restart: unless-stopped
+    # Same pinned resolvers as the n8n service: the worker executes the Code nodes that call
+    # api.github.com, so a container with no upstream DNS fails the crawl rather than the editor.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     command: ["worker", "--concurrency=${QUEUE_WORKER_CONCURRENCY:-5}"]
     depends_on:
       postgres:
