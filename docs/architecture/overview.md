@@ -11,6 +11,9 @@ n8n is the backend. There is no application server, and the database is the prod
 - **One responsibility per workflow, connected by a pipe.** `collect-*` fetches from GitHub
   and hands records over; `persist-*` writes records to the database and owns nothing else.
   Each can be replaced without rewriting the other, and either can be run on its own.
+- **A crawl is resumable.** A repository whose history needs more pages than one run may spend
+  stores `commit_page_cursor` and continues from the next page, so the budget costs latency rather
+  than completeness.
 - **Committed observations are pruned.** A commit that no longer exists upstream is deleted
   from the database rather than kept with a tombstone. The product shows what exists, not a
   history of what once did.
