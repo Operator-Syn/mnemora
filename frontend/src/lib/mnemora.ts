@@ -35,7 +35,11 @@ export interface RepositoriesResponse {
 
 export interface RepositoryIndex {
   ok: boolean
-  /** Present when `ok` is false: the API answered with an error envelope, or was unreachable. */
+  /**
+   * Present when `ok` is false. `kind` is what the page switches on; `reason` is the raw detail,
+   * which is for the operator's eyes and for local development — never for a visitor.
+   */
+  kind?: 'config' | 'network' | 'api'
   reason?: string
   repositories: Repository[]
   totalCommits: number
@@ -81,22 +85,29 @@ export const getRepositoryIndex = createServerFn({ method: 'GET' }).handler(
       refreshedAt: null,
     }
 
+    let key: string
+    try {
+      key = readKey()
+    } catch (error) {
+      return { ...empty, kind: 'config', reason: (error as Error).message }
+    }
+
     let res: Response
     try {
       res = await fetch(`${apiUrl()}/repos`, {
-        headers: { 'X-Mnemora-Read-Key': readKey() },
+        headers: { 'X-Mnemora-Read-Key': key },
       })
     } catch (error) {
       // A network failure is reported to the page, not thrown at it: the dashboard should say
       // "the collector is unreachable" rather than render an error boundary.
-      return { ...empty, reason: `API unreachable: ${(error as Error).message}` }
+      return { ...empty, kind: 'network', reason: `API unreachable: ${(error as Error).message}` }
     }
 
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as
         | { error?: string; reason?: string }
         | null
-      return { ...empty, reason: body?.reason ?? `API answered ${res.status}` }
+      return { ...empty, kind: 'api', reason: body?.reason ?? `API answered ${res.status}` }
     }
 
     const data = (await res.json()) as RepositoriesResponse
