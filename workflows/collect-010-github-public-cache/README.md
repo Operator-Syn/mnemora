@@ -25,16 +25,18 @@ dashboard reads it instead of talking to GitHub itself.
 | what | value | why |
 |---|---|---|
 | credential `Mnemora DB (read-only)` (type `postgres`) | database `mnemora`, user `mnemora_reader` | `Read State` decides what to fetch; the role can `SELECT` only and cannot reach n8n's database |
-| credential `Mnemora Pipe` (type `httpHeaderAuth`) | header `X-Mnemora-Pipe-Token` | the `Collect` node authenticates to `persist-010` when it posts each record; the pipe answers `403` without it |
-| published + active | yes | the six-hour schedule only fires from a published version |
-| run lease | held by `persist-010` | a second concurrent run is refused instead of crawling twice |
+| shared secret `MNEMORA_PIPE_TOKEN` | stack `.env`, injected into `n8n` and `worker` | `Collect`, `Acquire Run Lock`, `Record Run` and `Release Run Lock` sign each pipe request with it (HMAC-SHA256); nothing transmits the secret itself, and the pipe answers `401` without a valid signature |
+| published + active | yes | the hourly schedule only fires from a published version |
+| run lease | held by `persist-010` | a second concurrent run is refused instead of crawling twice — and is recorded as `busy`, not as a failure |
 
 This workflow reads **no** database secrets itself: the connection is an n8n credential. The
 settings it does read from the environment are in `.env.example` beside this file.
 
 ## Nodes
 
-`Manual Run` / `Every Hour` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Record Run` → `Release Run Lock`
+`Manual Run` / `Every Hour` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Lease Available?`
+&nbsp;&nbsp;&nbsp;&nbsp;`Lease Available?` (true) → `Collect` → `Record Run` → `Release Run Lock`
+&nbsp;&nbsp;&nbsp;&nbsp;`Lease Available?` (false, lease held by another run) → `Record Run` (records `busy`) → `Release Run Lock` (no-op)
 
 `Collect` also feeds `To JSON File` → `Write Public Cache`, the derived export. There is no separate
 posting node any more: `Collect` posts each repository's record the moment that repository finishes
@@ -54,9 +56,15 @@ first repository and still reported `success`. A single pass over the discovered
 cannot drop an entry without also failing.
 
 `Acquire Run Lock` claims a lease in the product database before a single GitHub call, so a
-scheduled tick landing on a manual run fails in seconds instead of crawling everything twice. The
-lease is atomic (`INSERT ... ON CONFLICT DO UPDATE ... WHERE expired`), released when fetching
-finishes, and expires on its own if a run dies. `COLLECT_010_RUN_LOCK=false` bypasses it.
+scheduled tick landing on a manual run does not crawl everything twice. The lease is atomic
+(`INSERT ... ON CONFLICT DO UPDATE ... WHERE expired`), released when fetching finishes, and expires
+on its own if a run dies. `COLLECT_010_RUN_LOCK=false` bypasses it.
+
+Being refused is **not** a failure. `Acquire Run Lock` returns `run_lock='held'` with the holder and
+its expiry, `Lease Available?` routes that tick straight to `Record Run`, and the run is filed with
+`status='busy'` and null counters. Before this, a refusal threw — so a correct refusal produced a red
+run, and because n8n retried it, a burst of them. `busy` rows are contention; `error` rows are
+outages. A streak of `busy` is a lease-health signal, not a crawl failure.
 
 ## Re-runs are cheap — two collection modes
 
@@ -259,12 +267,19 @@ token is required, not optional.
 
 ## Authentication (optional)
 
-The workflow reads `COLLECT_010_GITHUB_TOKEN` and, only if it is non-empty, sends
-`Authorization: Bearer <token>`. Empty means anonymous — no header at all.
+The `Collect` node reads `COLLECT_010_GITHUB_TOKEN` and, only if it is non-empty, sends the
+`Authorization` header. Empty means anonymous — no header at all.
 
 GitHub allows **60 requests/hour anonymously and 5,000/hour with any valid token**
 (measured, not assumed). Authentication changes the quota, not the semantics: this is
 still public data, and discovery still cannot see private repositories.
+
+The token is deliberately **not** carried in `Build Plan`'s output. It used to be: the plan held a
+`headers` object, every downstream item inherited it, and n8n persists failed executions — so a
+resolved bearer header was sitting in `execution_data`. Headers are now built where they are used,
+and GitHub errors are rethrown as a status and a path rather than as the axios error object (which
+carries the request config, headers included). The residual is honest and unchanged: with
+`N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, any workflow on this instance can still read `$env`.
 
 **Use the narrowest token that works.** A classic token with **no scopes** reads public
 data and raises the quota. A token carrying `repo` also grants access to your private
