@@ -15,9 +15,11 @@ cd "$(dirname "$0")/.."
 
 url="${MNEMORA_PIPE_URL:-http://127.0.0.1:5680/webhook/mnemora-commits}"
 
-# The write pipe is authenticated: this script must present the same header the collector does.
+# The write pipe is authenticated by a signature, not by a bearer token: HMAC-SHA256 over
+# "<unix-ts>.records.record" with the shared secret. A single cache file is one repository record,
+# which is why the identity is the constant `record`. The signature expires in 60 seconds.
 token="${MNEMORA_PIPE_TOKEN:-$(grep -m1 '^MNEMORA_PIPE_TOKEN=' .env 2>/dev/null | cut -d= -f2-)}"
-[ -n "$token" ] || { echo "MNEMORA_PIPE_TOKEN missing — the pipe answers 403 without it" >&2; exit 1; }
+[ -n "$token" ] || { echo "MNEMORA_PIPE_TOKEN missing — the pipe answers 401 without a signature" >&2; exit 1; }
 data_dir="${MNEMORA_DATA_DIR:-/home/node/mnemora-data/public}"
 
 # Cache files live inside the worker's volume, so read them through the container.
@@ -36,10 +38,12 @@ fi
 total_repos=0 total_commits=0 failed=0
 for f in "${files[@]}"; do
   body=$(read_file_from_volume "$f")
+  ts=$(date +%s)
+  sig=$(printf '%s' "$ts.records.record" | openssl dgst -sha256 -hmac "$token" | sed 's/^.*= //')
   # Body goes through stdin, not argv: a 400 KB cache file overflows the kernel's argument
   # list limit and curl fails with "Argument list too long".
   response=$(printf '%s' "$body" | curl -sS -X POST "$url" -H 'Content-Type: application/json' \
-    -H "X-Mnemora-Pipe-Token: $token" \
+    -H "X-Mnemora-Timestamp: $ts" -H "X-Mnemora-Signature: $sig" \
     --data-binary @- --max-time 300 -w '\n%{http_code}') || {
       echo "FAIL $(basename "$f") — curl error" >&2; failed=$((failed + 1)); continue; }
 
