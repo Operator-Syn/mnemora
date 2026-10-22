@@ -206,6 +206,21 @@ for (const repo of repos) {
   let mode = 'full';
   let preserved = false;
 
+  // A crawl that stopped at the page budget leaves a cursor behind. The next run continues from
+  // it instead of re-reading pages it already has — without this, a repository larger than the
+  // budget could never finish: every run read pages 1..N, stopped at N, and marked itself partial
+  // forever. The crawl id groups the runs of one crawl, so pruning can tell "seen earlier in this
+  // crawl" from "not seen at all".
+  const openCrawl = !!(prev && prev.commit_crawl_id && Number(prev.commit_page_cursor) > 0);
+  const crawlId = openCrawl ? prev.commit_crawl_id : `${$execution.id || 'run'}-${repo.id}`;
+  const crawlStartedAt = openCrawl && prev.commit_crawl_started_at_utc
+    ? prev.commit_crawl_started_at_utc
+    : nowIso;
+  const startPage = openCrawl ? Number(prev.commit_page_cursor) + 1 : 1;
+  let lastPage = openCrawl ? Number(prev.commit_page_cursor) : 0;
+  let reachedEnd = false;
+  let pagesThisRun = 0;
+
   try {
     languages = (await get(`${API}/repos/${fullName}/languages`)) || languages;
   } catch (e) {
@@ -250,17 +265,27 @@ for (const repo of repos) {
     }
 
     if (mode === 'full') {
-      for (let page = 1; page <= cfg.maxCommitPages; page++) {
+      // Absolute page numbers, budget counted per run: page 51 is allowed on a later run even
+      // though the budget is 50. A short page means we reached the oldest commit.
+      for (let page = startPage; ; page++) {
+        if (pagesThisRun >= cfg.maxCommitPages) {
+          state = 'partial';
+          error =
+            `commits: page budget of ${cfg.maxCommitPages} spent at page ${lastPage}; ` +
+            `resumes from page ${lastPage + 1} next run`;
+          break;
+        }
         const qs = { per_page: 100, page };
         if (cfg.since) qs.since = cfg.since;
         const raw = await get(`${API}/repos/${fullName}/commits`, qs);
         const list = Array.isArray(raw) ? raw : [];
+        pagesThisRun++;
         pages = page;
+        lastPage = page;
         commits.push(...list.filter((c) => c && c.sha));
-        if (list.length < 100) break;
-        if (page === cfg.maxCommitPages) {
-          state = 'partial';
-          error = `commits: capped at ${cfg.maxCommitPages} pages (${commits.length} commits)`;
+        if (list.length < 100) {
+          reachedEnd = true;
+          break;
         }
       }
     }
@@ -321,6 +346,25 @@ for (const repo of repos) {
     continue;
   }
 
+  // 'complete' now means "this crawl reached the oldest commit", not "this run stopped".
+  // A crawl that ends without either a short page or the oldest page is not complete, whatever
+  // the earlier state said.
+  const crawlComplete = state === 'complete' && reachedEnd;
+  if (state === 'complete' && !crawlComplete) {
+    state = 'partial';
+    error = error || `commits: crawl stopped at page ${lastPage} without reaching the end`;
+  }
+
+  // The total is only knowable when a crawl finishes: rows this crawl already confirmed in earlier
+  // runs, plus what this run fetched. Counting every stored row instead would double-count commits
+  // that already existed from a previous crawl, since they are upserted rather than added again.
+  // On a fresh crawl crawl_rows is 0, so this run's pages are the whole history. A partial run
+  // reports the count the database already holds, so the number never dips to "the pages I read
+  // this hour".
+  const commitTotal = crawlComplete
+    ? commits.length + Number((prev && prev.crawl_rows) || 0)
+    : Number((prev && prev.commit_count) || 0);
+
   (state === 'error' || state === 'stale' ? pipeOnly : out).push({
     json: {
       repository_id: repo.id,
@@ -336,8 +380,14 @@ for (const repo of repos) {
       history: cfg.history,
       period_start_utc: periodStart,
       period_end_utc: cfg.until,
+      // Which crawl these commits belong to, whether it finished, and where to resume.
+      commit_crawl_id: crawlId,
+      commit_crawl_complete: crawlComplete,
+      commit_page_cursor: crawlComplete ? 0 : lastPage,
+      commit_crawl_started_at_utc: crawlStartedAt,
+      commit_page_started_at: startPage,
       commit_pages_fetched: pages,
-      commit_count: detail.length,
+      commit_count: commitTotal,
       commit_count_definition:
         'Commits returned by the GitHub REST commits endpoint for the default branch, newest first; not an authored-contribution count.',
       collection: mode,
