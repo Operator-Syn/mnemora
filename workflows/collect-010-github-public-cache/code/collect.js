@@ -35,6 +35,43 @@ async function get(url, qs) {
   return res.body;
 }
 
+// --- the pipe ------------------------------------------------------------------------------
+// Each record is posted the moment its repository finishes, not queued for a later node. The
+// reason is a failure mode: if this node is killed by the task timeout halfway through a run,
+// everything still sitting in its output is lost — including the cursors of repositories that were
+// fully fetched. Posting inside the loop bounds that loss to the repository in flight, because the
+// database is already current for every repository before it.
+//
+// Retries mirror what the HTTP node used to provide: three attempts, two seconds apart. A record
+// that still cannot be persisted throws, failing the run loudly rather than looking successful.
+const PIPE_URL = 'http://n8n:5678/webhook/mnemora-commits';
+const pipeResults = [];
+async function pipe(payload, label) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await this.helpers.httpRequest({
+        method: 'POST',
+        url: PIPE_URL,
+        body: payload,
+        headers: {
+          'Content-Type': 'application/json',
+          // A Code node cannot hold an n8n credential; the pipe token comes from the environment.
+          'X-Mnemora-Pipe-Token': $env.MNEMORA_PIPE_TOKEN || '',
+        },
+        json: true,
+        timeout: 30000,
+      });
+      pipeResults.push({ label, response: res || {} });
+      return res || {};
+    } catch (e) {
+      lastError = e;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+  throw new Error(`pipe: ${label} failed after 3 attempts: ${lastError?.message}`);
+}
+
 // --- previous state, read from the database by the node before this one ------------
 // The database is the source of truth for "what do we already have". The cache files are an
 // export, not an input: moving or deleting them changes nothing about what this run decides.
@@ -75,12 +112,15 @@ const out = [];
 // Records that must reach the database but must not touch the cache export: skipped
 // repositories (no commit list) and failed fetches (would replace good data with nothing).
 // Kept separate so the export branch's item order stays 1:1 with the files it writes.
-const pipeOnly = [];
 const status = [];
 // A repository with no row, or a row still marked pending, is a cold-start fetch: it has never
 // been collected. These are the expensive ones, so a run takes only so many.
 let coldFetched = 0;
 const coldCap = Number(cfg.maxNewPerRun) > 0 ? Number(cfg.maxNewPerRun) : Infinity;
+
+// Spend of the run-wide page budget (not per repository); shared across the loop below.
+let pagesSpentTotal = 0;
+let anchorRestarts = 0;
 
 for (const repo of repos) {
   const fullName = repo.full_name;
@@ -95,18 +135,16 @@ for (const repo of repos) {
   // and is owed a collection, and so the dashboard can tell "not yet collected" from "empty".
   // Nothing is fetched, nothing is pruned, and the next run picks it up.
   if (isColdStart && coldFetched >= coldCap) {
-    pipeOnly.push({
-      json: {
-        repository_id: repo.id, full_name: fullName, visibility: repo.visibility,
-        default_branch: repo.default_branch, description: repo.description || null,
-        is_fork: !!repo.fork, is_archived: !!repo.archived, html_url: repo.html_url,
-        pushed_at_utc: repo.pushed_at, languages_bytes: (prev?.languages_bytes) || {},
-        history: cfg.history, commit_count: 0, collection: 'pending',
-        source_state: 'pending',
-        source_error: 'pending: cold-start budget reached, not yet collected',
-        refreshed_at_utc: nowIso, commits_omitted: true, cache_file: cacheFile,
-      },
-    });
+    await pipe({
+      repository_id: repo.id, full_name: fullName, visibility: repo.visibility,
+      default_branch: repo.default_branch, description: repo.description || null,
+      is_fork: !!repo.fork, is_archived: !!repo.archived, html_url: repo.html_url,
+      pushed_at_utc: repo.pushed_at, languages_bytes: (prev?.languages_bytes) || {},
+      history: cfg.history, commit_count: 0, collection: 'pending',
+      source_state: 'pending',
+      source_error: 'pending: cold-start budget reached, not yet collected',
+      refreshed_at_utc: nowIso, commits_omitted: true, cache_file: cacheFile,
+    }, `${fullName} (pending)`);
     status.push({
       cache_file: cacheFile, full_name: fullName, collection: 'pending',
       refreshed_at_utc: nowIso, data_changed_at_utc: null, commit_count: 0,
@@ -161,29 +199,27 @@ for (const repo of repos) {
     if (typeof prevLanguages === 'string') {
       try { prevLanguages = JSON.parse(prevLanguages); } catch (_e) { prevLanguages = {}; }
     }
-    pipeOnly.push({
-      json: {
-        repository_id: repo.id,
-        full_name: fullName,
-        visibility: repo.visibility,
-        default_branch: repo.default_branch,
-        description: repo.description || null,
-        is_fork: !!repo.fork,
-        is_archived: !!repo.archived,
-        html_url: repo.html_url,
-        pushed_at_utc: repo.pushed_at,
-        languages_bytes: prevLanguages,
-        history: cfg.history,
-        commit_count: Number(prev.commit_count) || 0,
-        collection: 'skipped',
-        source_state: prev.source_state || 'complete',
-        source_error: prev.source_error || null,
-        refreshed_at_utc: nowIso,
-        commits_omitted: true,
-        skip_cache_write: true,
-        cache_file: cacheFile,
-      },
-    });
+    await pipe({
+      repository_id: repo.id,
+      full_name: fullName,
+      visibility: repo.visibility,
+      default_branch: repo.default_branch,
+      description: repo.description || null,
+      is_fork: !!repo.fork,
+      is_archived: !!repo.archived,
+      html_url: repo.html_url,
+      pushed_at_utc: repo.pushed_at,
+      languages_bytes: prevLanguages,
+      history: cfg.history,
+      commit_count: Number(prev.commit_count) || 0,
+      collection: 'skipped',
+      source_state: prev.source_state || 'complete',
+      source_error: prev.source_error || null,
+      refreshed_at_utc: nowIso,
+      commits_omitted: true,
+      skip_cache_write: true,
+      cache_file: cacheFile,
+    }, `${fullName} (skipped)`);
     status.push({
       cache_file: cacheFile,
       full_name: fullName,
@@ -193,6 +229,24 @@ for (const repo of repos) {
       commit_count: Number(prev.commit_count) || 0,
       source_state: prev.source_state,
       source_error: prev.source_error || null,
+      ms: Date.now() - repoStartedAt,
+    });
+    continue;
+  }
+
+  // The run's page budget is spent: leave this repository untouched and let the next run take it.
+  // Placed after the skip branch on purpose — an unchanged repository still costs nothing and must
+  // still be reported as skipped, budget or no budget.
+  if (pagesSpentTotal >= cfg.maxPagesPerRun) {
+    status.push({
+      cache_file: cacheFile,
+      full_name: fullName,
+      collection: 'deferred',
+      refreshed_at_utc: nowIso,
+      data_changed_at_utc: prev ? prev.data_changed_at_utc || prev.refreshed_at_utc : null,
+      commit_count: prev ? prev.commit_count : 0,
+      source_state: prev ? prev.source_state : 'pending',
+      source_error: 'deferred: run page budget spent, cache left untouched',
       ms: Date.now() - repoStartedAt,
     });
     continue;
@@ -212,16 +266,48 @@ for (const repo of repos) {
   // forever. The crawl id groups the runs of one crawl, so pruning can tell "seen earlier in this
   // crawl" from "not seen at all".
   const openCrawl = !!(prev?.commit_crawl_id && Number(prev.commit_page_cursor) > 0);
-  const crawlId = openCrawl ? prev.commit_crawl_id : `${$execution.id || 'run'}-${repo.id}`;
-  const crawlStartedAt = openCrawl && prev.commit_crawl_started_at_utc
+  let crawlId = openCrawl ? prev.commit_crawl_id : `${$execution.id || 'run'}-${repo.id}`;
+  let crawlStartedAt = openCrawl && prev.commit_crawl_started_at_utc
     ? prev.commit_crawl_started_at_utc
     : nowIso;
-  const startPage = openCrawl ? Number(prev.commit_page_cursor) + 1 : 1;
+  let startPage = openCrawl ? Number(prev.commit_page_cursor) + 1 : 1;
   let lastPage = openCrawl ? Number(prev.commit_page_cursor) : 0;
+  // Oldest commit confirmed by this crawl. It is the anchor the next run verifies before trusting
+  // a page number: positions in a commit list are not stable, shas are.
+  let boundarySha = openCrawl ? prev.commit_boundary_sha || null : null;
+  let anchorCheck = openCrawl ? 'unchecked' : 'new-crawl';
   let reachedEnd = false;
   let pagesThisRun = 0;
 
   try {
+    // Trust the cursor only if the commit it stopped at is still where the list says it is.
+    //
+    // Pages are positions, so a force-push that shortens history moves every commit above our
+    // anchor up by the number of commits removed — and resuming at cursor + 1 would step over
+    // commits we never fetched. Reading the cursor page and looking for the anchor costs one call
+    // and catches that. It does NOT restart when commits are merely added at the top: those push
+    // the anchor down, re-covering a few already-seen commits (deduped by sha) but never skipping.
+    if (openCrawl && prev.commit_boundary_sha) {
+      const anchorPage = await get(`${API}/repos/${fullName}/commits`, {
+        per_page: 100,
+        page: Number(prev.commit_page_cursor),
+        ...(cfg.since ? { since: cfg.since } : {}),
+      });
+      const list = Array.isArray(anchorPage) ? anchorPage : [];
+      if (list.some((c) => c?.sha === prev.commit_boundary_sha)) {
+        anchorCheck = 'anchor-holds';
+      } else {
+        anchorCheck = 'anchor-lost-restarted';
+        // Start over rather than skip: a new crawl id means the rows this crawl confirms will be
+        // the ones the eventual prune keeps.
+        crawlId = `${$execution.id || 'run'}-${repo.id}-r${Date.now()}`;
+        crawlStartedAt = nowIso;
+        startPage = 1;
+        lastPage = 0;
+        boundarySha = null;
+      }
+    }
+
     languages = (await get(`${API}/repos/${fullName}/languages`)) || languages;
   } catch (e) {
     state = 'partial';
@@ -271,7 +357,16 @@ for (const repo of repos) {
         if (pagesThisRun >= cfg.maxCommitPages) {
           state = 'partial';
           error =
-            `commits: page budget of ${cfg.maxCommitPages} spent at page ${lastPage}; ` +
+            `commits: per-repository page budget of ${cfg.maxCommitPages} spent at page ${lastPage}; ` +
+            `resumes from page ${lastPage + 1} next run`;
+          break;
+        }
+        // A run-wide ceiling, so one run cannot spend all its time on whichever repositories
+        // happen to be large. Whatever is left is persisted with a cursor and picked up next run.
+        if (pagesSpentTotal >= cfg.maxPagesPerRun) {
+          state = 'partial';
+          error =
+            `commits: run page budget of ${cfg.maxPagesPerRun} spent at page ${lastPage}; ` +
             `resumes from page ${lastPage + 1} next run`;
           break;
         }
@@ -280,6 +375,7 @@ for (const repo of repos) {
         const raw = await get(`${API}/repos/${fullName}/commits`, qs);
         const list = Array.isArray(raw) ? raw : [];
         pagesThisRun++;
+        pagesSpentTotal++;
         pages = page;
         lastPage = page;
         commits.push(...list.filter((c) => c?.sha));
@@ -361,12 +457,15 @@ for (const repo of repos) {
   // On a fresh crawl crawl_rows is 0, so this run's pages are the whole history. A partial run
   // reports the count the database already holds, so the number never dips to "the pages I read
   // this hour".
+  // The oldest commit this run saw is the oldest the crawl has confirmed so far, because pages are
+  // walked newest to oldest.
+  if (commits.length) boundarySha = commits[commits.length - 1].sha;
+
   const commitTotal = crawlComplete
     ? commits.length + Number((prev?.crawl_rows) || 0)
     : Number((prev?.commit_count) || 0);
 
-  (state === 'error' || state === 'stale' ? pipeOnly : out).push({
-    json: {
+  const record = {
       repository_id: repo.id,
       full_name: fullName,
       visibility: repo.visibility,
@@ -384,6 +483,8 @@ for (const repo of repos) {
       commit_crawl_id: crawlId,
       commit_crawl_complete: crawlComplete,
       commit_page_cursor: crawlComplete ? 0 : lastPage,
+      commit_boundary_sha: crawlComplete ? null : boundarySha,
+      commit_anchor_check: anchorCheck,
       commit_crawl_started_at_utc: crawlStartedAt,
       commit_page_started_at: startPage,
       commit_pages_fetched: pages,
@@ -396,13 +497,22 @@ for (const repo of repos) {
       refreshed_at_utc: nowIso,
       data_changed_at_utc: nowIso,
       cache_file: cacheFile,
-      commits: detail,
-    },
-  });
+    commits: detail,
+  };
+
+  // Persisted here, the moment this repository is done — see the pipe helper for why.
+  await pipe(record, fullName);
+
+  // Failed or stale records are persisted but never exported: a hollow record must not replace the
+  // cache file that still holds the repository's last good history.
+  if (state !== 'error' && state !== 'stale') out.push({ json: record });
+
+  if (anchorCheck === 'anchor-lost-restarted') anchorRestarts++;
 
   status.push({
     cache_file: cacheFile,
     full_name: fullName,
+    anchor_check: anchorCheck,
     collection: mode,
     refreshed_at_utc: nowIso,
     data_changed_at_utc: nowIso,
@@ -425,6 +535,29 @@ const archivedIds = known
   .filter((row) => !listedIds.has(Number(row.repository_id)))
   .map((row) => Number(row.repository_id));
 
+// The archive list is the last thing that needs the pipe: repositories under this owner that the
+// listing no longer contains. Posted here rather than downstream for the same reason as records.
+if (archivedIds.length) {
+  await pipe({ archived_repository_ids: archivedIds }, 'archive batch');
+}
+
+// Sum what persist answered, so the run summary does not have to re-read node outputs that now
+// live in this node's memory rather than in a downstream HTTP node.
+const pipeTotals = pipeResults.reduce(
+  (acc, r) => {
+    const x = r.response || {};
+    // Only repository responses carry these; lease and summary responses have their own shape.
+    if (typeof x.commits_seen !== 'number') return acc;
+    acc.commits_seen += Number(x.commits_seen) || 0;
+    acc.commits_new += Number(x.commits_new) || 0;
+    acc.commits_pruned += Number(x.commits_pruned) || 0;
+    acc.repositories += Number(x.repositories) || 0;
+    acc.repositories_archived += Number(x.repositories_archived) || 0;
+    return acc;
+  },
+  { commits_seen: 0, commits_new: 0, commits_pruned: 0, repositories: 0, repositories_archived: 0 },
+);
+
 // One small file per run: which repositories were checked and when. Written every run so
 // the "last checked" signal survives without rewriting multi-hundred-kilobyte payloads.
 out.push({
@@ -436,6 +569,12 @@ out.push({
     repositories: status.sort((a, b) => a.cache_file.localeCompare(b.cache_file)),
     archived_repository_ids: archivedIds,
     api_calls: apiCalls,
+    // How the run spent its page budget, and whether any resume anchor was lost to a rewritten
+    // history (which restarts that crawl from page 1 rather than skipping commits).
+    pages_spent: pagesSpentTotal,
+    page_budget: cfg.maxPagesPerRun,
+    anchor_restarts: anchorRestarts,
+    pipe_totals: pipeTotals,
     // Per-repository outcome, for debugging a run after it is over. Successful executions are not
     // stored by n8n here, so if this is not recorded the detail is gone the moment the run ends.
     telemetry: status.map((s) => ({
@@ -447,7 +586,6 @@ out.push({
       ms: s.ms === undefined ? null : s.ms,
       error: s.source_error === undefined ? null : s.source_error,
     })),
-    pipe_only_records: pipeOnly.map((i) => i.json),
     cache_file: STATUS_FILE,
   },
 });
