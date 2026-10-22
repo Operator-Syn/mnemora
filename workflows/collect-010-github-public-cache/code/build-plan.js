@@ -30,7 +30,7 @@ const maxNewPerRun = Number(env('COLLECT_010_MAX_NEW_PER_RUN', 12));
 const token = env('COLLECT_010_GITHUB_TOKEN', '');
 
 const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'mnemora-collector' };
-if (token) headers.Authorization = 'Bearer ' + token;
+if (token) headers.Authorization = `Bearer ${token}`;
 
 const now = new Date();
 const until = now.toISOString();
