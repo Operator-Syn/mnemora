@@ -1,0 +1,351 @@
+{
+  "active": false,
+  "connections": {
+    "GET repos": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SQL repos",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GET repository": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SQL repository",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GET commits": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SQL commits",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GET activity": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "SQL activity",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SQL repos": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Shape Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SQL repository": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Shape Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SQL commits": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Shape Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "SQL activity": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Shape Response",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Shape Response": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Reply",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "id": "srv010apipub0001",
+  "meta": {
+    "mnemora": {
+      "boundary": "Public repositories only, enforced by WHERE visibility = 'public' in every statement and by a read-only role.",
+      "contract": "docs/product/requirements.md",
+      "purpose": "Read-only API for the portfolio dashboard: repositories, commits, activity. GET only; no writes, no credentials beyond a SELECT role."
+    }
+  },
+  "name": "serve-010-public-api",
+  "nodes": [
+    {
+      "id": "c1a0f0a0-0001-4000-8000-000000000001",
+      "name": "GET repos",
+      "notes": "The index. `?include_archived=true` adds archived repositories; they are hidden by default because a portfolio is a claim about current work.\n\nEvery route here is public and unauthenticated: the data is the account's public GitHub activity and the stack publishes only on 127.0.0.1. CORS is '*'; pin it to the frontend's origin once that origin exists.",
+      "notesInFlow": true,
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "api/repos",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "position": [
+        -260,
+        -260
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "serve010-api-repos"
+    },
+    {
+      "id": "c1a0f0a0-0002-4000-8000-000000000002",
+      "name": "GET repository",
+      "notes": "One repository. The key is `?id=` and accepts the numeric repository_id or `owner/name` \u2014 a dashboard links by name, a script by id.\n\nNot `/api/repos/:id`: n8n advertises path parameters, but its lookup keys dynamic webhooks on the request's FIRST segment being the webhook id, so `/api/repos/123` registers and then never matches. Verified live; query strings it is.",
+      "notesInFlow": true,
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "api/repository",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "position": [
+        -260,
+        -60
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "serve010-api-repository"
+    },
+    {
+      "id": "c1a0f0a0-0003-4000-8000-000000000003",
+      "name": "GET commits",
+      "notes": "Commits newest first, either across every repository or scoped with `?repository_id=owner/name` (or a numeric id). `?limit=` 1..200, default 50; `?before=` is the cursor from the previous page's next_before.\n\nOne route for both feeds because they differ by a single predicate.",
+      "notesInFlow": true,
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "api/commits",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "position": [
+        -260,
+        140
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "serve010-api-commits"
+    },
+    {
+      "id": "c1a0f0a0-0004-4000-8000-000000000004",
+      "name": "GET activity",
+      "notes": "Commits per day over `?days=` (1..365, default 90), for a heatmap or a totals strip.",
+      "notesInFlow": true,
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "api/activity",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "position": [
+        -260,
+        340
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "webhookId": "serve010-api-activity"
+    },
+    {
+      "credentials": {
+        "postgres": {
+          "id": "2e9YVERiyWeFthxi",
+          "name": "Mnemora DB (read-only)"
+        }
+      },
+      "id": "c1a0f0a0-0005-4000-8000-000000000005",
+      "name": "SQL repos",
+      "notes": "One statement, one jsonb envelope: route + status + data. Public only, by contract and by role.",
+      "notesInFlow": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ 'v1|' + ($json.query?.include_archived ?? '') }}"
+        },
+        "query": "@file:sql/repos.sql"
+      },
+      "position": [
+        -40,
+        -260
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
+    },
+    {
+      "credentials": {
+        "postgres": {
+          "id": "2e9YVERiyWeFthxi",
+          "name": "Mnemora DB (read-only)"
+        }
+      },
+      "id": "c1a0f0a0-0006-4000-8000-000000000006",
+      "name": "SQL repository",
+      "notes": "Returns status 404 as data rather than as an error, so the HTTP layer stays one branch. A non-numeric key is compared as text, so it cannot raise a cast error.",
+      "notesInFlow": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ 'v1|' + ($json.query?.id ?? '') }}"
+        },
+        "query": "@file:sql/repository.sql"
+      },
+      "position": [
+        -40,
+        -60
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
+    },
+    {
+      "credentials": {
+        "postgres": {
+          "id": "2e9YVERiyWeFthxi",
+          "name": "Mnemora DB (read-only)"
+        }
+      },
+      "id": "c1a0f0a0-0007-4000-8000-000000000007",
+      "name": "SQL commits",
+      "notes": "Pipe-joined because n8n's Postgres node splits a parameter on commas, and an ISO timestamp contains them. The `v1|` prefix keeps $1 bound even when every argument is absent.",
+      "notesInFlow": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ 'v1|' + [$json.query?.repository_id ?? '', $json.query?.limit ?? '', $json.query?.before_ms ?? ''].join('|') }}"
+        },
+        "query": "@file:sql/commits.sql"
+      },
+      "position": [
+        -40,
+        140
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
+    },
+    {
+      "credentials": {
+        "postgres": {
+          "id": "2e9YVERiyWeFthxi",
+          "name": "Mnemora DB (read-only)"
+        }
+      },
+      "id": "c1a0f0a0-0008-4000-8000-000000000008",
+      "name": "SQL activity",
+      "notes": "Bounded window: the clamp is in SQL, so the query string cannot ask for a year of buckets.",
+      "notesInFlow": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "options": {
+          "queryReplacement": "={{ 'v1|' + ($json.query?.days ?? '') }}"
+        },
+        "query": "@file:sql/activity.sql"
+      },
+      "position": [
+        -40,
+        340
+      ],
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7
+    },
+    {
+      "id": "c1a0f0a0-0009-4000-8000-000000000009",
+      "name": "Shape Response",
+      "notes": "The only node that knows about HTTP: status, error envelope, cache headers. All four SQL branches converge here, so a change to the shape of an error is one file.",
+      "notesInFlow": true,
+      "parameters": {
+        "jsCode": "@file:code/shape-response.js"
+      },
+      "position": [
+        200,
+        40
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "c1a0f0a0-0010-4000-8000-000000000010",
+      "name": "Reply",
+      "notes": "Sends the status and body Shape Response produced, with its cache headers. 200 responses are cacheable for a minute because the underlying data moves hourly; errors are not cached at all.",
+      "notesInFlow": true,
+      "parameters": {
+        "options": {
+          "responseCode": "={{ $json.responseCode }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Cache-Control",
+                "value": "={{ $json.headers['Cache-Control'] }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "={{ $json.headers['Content-Type'] }}"
+              }
+            ]
+          }
+        },
+        "respondWith": "json",
+        "responseBody": "={{ $json.body }}"
+      },
+      "position": [
+        420,
+        40
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1
+    }
+  ],
+  "pinData": {},
+  "settings": {
+    "availableInMCP": true,
+    "executionOrder": "v1",
+    "executionTimeout": 60
+  }
+}
