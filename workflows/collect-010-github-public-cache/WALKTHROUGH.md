@@ -46,8 +46,8 @@ inactive, because activation is the moment it begins making outbound requests on
 ## Step 2 — Build Plan: read the settings, touch nothing
 
 This step reads `.env` and answers: which accounts to look at, how much history (all of it, or the
-last N days), how many pages of commits to allow, whether forks and archived repositories count,
-and whether there is a GitHub token to authenticate with.
+last N days), how many commit pages each run may spend, whether forks and archived repositories
+count, and whether there is a GitHub token to authenticate with.
 
 It makes **no network calls**. That is deliberate. A malformed setting — an empty account list, a
 nonsense number — fails here in a fraction of a second with a message naming the variable. The
@@ -105,9 +105,14 @@ reconciliation rules is one rule too many.
 
 **2. Fetch.** For each repository that needs it: the language byte counts, then commits 100 at a
 time until GitHub returns fewer than 100 — that is how "the end of history" is detected.
-`operator-synaciel` needs 29 pages. The run watches GitHub's remaining quota in response headers
-and stops spending at `COLLECT_010_RATE_RESERVE`, marking the rest `deferred` instead of failing
-each one.
+`operator-synaciel` needs 29 pages, which fits inside one run's budget of 50. The run watches
+GitHub's remaining quota in response headers and stops spending at `COLLECT_010_RATE_RESERVE`,
+marking the rest `deferred` instead of failing each one.
+
+**A history bigger than the budget does not fail — it continues.** Spending the page budget stores
+`commit_page_cursor`, and the next run starts at `cursor + 1` rather than page 1. The crawl id
+travels with every commit row it touches, so when a crawl finally reaches a short page the database
+can delete exactly the rows that crawl did not confirm, including rows from an earlier crawl.
 
 **3. Report.** Every repository produces a record, including the skipped ones — with
 `commits_omitted: true` — so the database learns it was checked and advances `refreshed_at_utc`
@@ -202,13 +207,18 @@ Every record says how much to trust it. None of these is a crash; they are hones
 | status | meaning |
 |---|---|
 | `complete` | the whole history was read and nothing failed |
-| `partial` | a sub-request failed, or the page cap was hit; `source_error` says which |
+| `partial` | a sub-request failed, or the page budget was spent; `source_error` says which, and `commit_page_cursor` says where the next run resumes |
 | `empty` | the repository genuinely has no commits (GitHub answers 409) — a real state |
 | `error` | the commits could not be read at all |
 | `stale` | the fetch failed but earlier data is still valid |
 
-Only `complete` records may prune. A `partial` or skipped record must never delete rows it did not
-fetch — that rule exists because breaking it once deleted every commit in the database.
+Only a **finished** crawl prunes, and it prunes by sweep: rows whose `last_seen_crawl_id` is not
+that crawl are deleted, while rows confirmed by earlier runs of the same crawl survive. A `partial`,
+`stale` or skipped record never deletes anything, and neither does a record whose `commits_omitted`
+is set — that rule exists because breaking it once deleted every commit in the database.
+
+The one-shot variant still exists for `scripts/backfill.sh`: a legacy full payload, marked
+`complete` with `commits_omitted` false and carrying no crawl id, prunes whatever it does not list.
 
 `commit_count` carries `commit_count_definition` next to it, because the number is not what people
 assume: it counts commits returned by the API for the default branch, including bot authors and
