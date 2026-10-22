@@ -57,7 +57,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "={{ $json.release_sql }}",
+        "query": "={{ $('Build Failure Summary').item.json.release_sql }}",
         "options": {}
       },
       "id": "d4c0e1a0-0005-4000-8000-000000000005",
@@ -74,7 +74,7 @@
           "name": "Mnemora DB"
         }
       },
-      "notes": "Deletes the failed run's own lease, so one transient error does not block every later tick until the TTL expires. Scoped to run_id: if another run holds the lease it is left alone, because that run may still be alive."
+      "notes": "Deletes the failed run's own lease, so one transient error does not block every later tick until the TTL expires. Scoped to run_id: if another run holds the lease it is left alone, because that run may still be alive. Reads the statement from Build Failure Summary by node reference, not from $json: a Postgres node's output is its own result rows, so $json.release_sql was undefined and the release silently failed with a SQL syntax error after the row was written."
     }
   ],
   "connections": {
