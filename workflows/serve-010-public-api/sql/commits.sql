@@ -37,6 +37,22 @@ arg as (
     case when before_raw ~ '^[0-9]+$' then before_raw::bigint end as before_ms
   from raw
 ),
+-- A scoped feed naming a repository that does not exist is a 404, not an empty list: "this
+-- repository has no commits" and "there is no such repository" are different answers, and only one
+-- of them is true here. A bare name (`arqen`) matches nothing by design — full_name is owner/name.
+scope_exists as (
+  select
+    (arg.repo_key is null) as unscoped,
+    exists (
+      select 1
+      from mnemora_repositories r, arg
+      where r.visibility = 'public'
+        and arg.repo_key is not null
+        and ((arg.repo_key ~ '^[0-9]+$' and r.repository_id::text = arg.repo_key)
+             or (arg.repo_key !~ '^[0-9]+$' and lower(r.full_name) = lower(arg.repo_key)))
+    ) as repo_found
+  from arg
+),
 page as (
   select c.sha, c.message, c.author_login, c.author_name,
          c.authored_at_utc, c.committed_at_utc,
@@ -94,4 +110,17 @@ select
       from page
     ), '[]'::jsonb)
   ) as data
-where not (select limit_bad or before_bad from bad);
+where not (select limit_bad or before_bad from bad)
+  and (select unscoped or repo_found from scope_exists)
+union all
+select
+  'commits'::text as route,
+  404 as status,
+  jsonb_build_object(
+    'error', 'not_found',
+    'route', 'commits',
+    -- Echo the key: the common mistake is omitting the owner, and the answer says so.
+    'reason', 'no public repository matching repository_id=' || (select repo_key from arg)
+  ) as data
+where (select not unscoped and not repo_found from scope_exists)
+  and not (select limit_bad or before_bad from bad);
