@@ -284,6 +284,36 @@ Refusing to import without --yes. Verify the source before granting this.
 time and the n8n id. The id matters: without it, every import creates a *new* workflow, which is how
 an edit can silently land on a duplicate while the real one keeps running the old version.
 
+## Linting the Code-node bodies
+
+`Code` nodes hold real JavaScript in `code/*.js`, so it should be linted like code. It cannot be
+linted naively: n8n runs each body inside its own wrapper, which makes top-level `return` and
+`await` legal there — and a plain parser reports
+
+```
+× Illegal return statement outside of a function
+```
+
+for all eight files, then stops looking. The first audit produced eight of those and would have
+concluded "eight broken files"; the truth was 24 findings in five files that the parse errors were
+hiding.
+
+`scripts/check-js-lint.py` wraps each body in `async function __n8nCodeNode() { … }`, lints the
+result with Biome, and maps line numbers back. It fails on **warnings** as well as errors
+(`--error-on-warnings`), because every finding in this codebase is the actionable kind.
+
+```
+./scripts/check-js-lint.py          # report
+./scripts/check-js-lint.py --fix --unsafe   # apply fixes, unwrapping the body back into the file
+```
+
+`biome.json` declares the n8n globals (`$input`, `$json`, `$`, `$execution`, `$env`, …) so they are
+not reported as undeclared, and leaves the formatter off: formatting these files is a separate
+decision from linting them.
+
+It is wired into `./scripts/workflows.sh check` and blocks `import` for the same reason the other
+gates do — a body that cannot parse is a body that will fail at runtime.
+
 ## Importing disarms production, and that is not obvious
 
 `n8n import:workflow` writes a **draft** and **deactivates** the workflow it touches. Every import is
