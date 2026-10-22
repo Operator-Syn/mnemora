@@ -127,7 +127,7 @@ The main instance creates executions; **workers run them**. Anything a workflow 
 1. **Build Plan** reads `COLLECT_010_OWNERS`, `COLLECT_010_WINDOW_DAYS`, the optional token, and the fork/archived flags from the workflow's own `.env`.
 2. **Read State** asks Postgres what is already collected, through the read-only `mnemora_reader` role: `repository_id`, `full_name`, `pushed_at_utc`, `commit_count`, `source_state`, `archived_at_utc` and languages per repository. This replaced the two file-reading nodes. The cache files are no longer an input, so deleting them changes nothing about what a run decides. An unreachable database fails the run rather than being read as "nothing collected".
 3. **Collect** lists every **public** repository of those owners through `/users/:owner/repos`, then decides per repository: `skipped` when `pushed_at` matches the database row (zero requests), `full` when it moved, is new, or the history mode changed. A repository is re-fetched in full rather than merged — the commits are rows now, and prune-on-complete removes what vanished after a rewrite. `COLLECT_010_WINDOW_DAYS=0` means full history.
-4. **Collect posts each record** to the persist webhook at `http://n8n:5678/webhook/mnemora-commits` as that repository finishes (three attempts, two seconds apart). If a record cannot be persisted the run fails: data that was collected and never stored must not report success. Posting inside the loop is deliberate — a task timeout then costs at most the repository in flight, instead of the whole run's work.
+4. **Collect posts each record** to the persist webhook at `http://n8n:5678/webhook/mnemora-commits` as that repository finishes (three attempts, two seconds apart, each signed with HMAC-SHA256 over `<ts>.records.record` — the pipe takes a signature, not a bearer token). If a record cannot be persisted the run fails: data that was collected and never stored must not report success. Posting inside the loop is deliberate — a task timeout then costs at most the repository in flight, instead of the whole run's work.
 5. **To JSON File → Write Public Cache** writes the same records to `public/github-public-cache__<owner>__<repo>.json` as an **export**, and `collector-status.json` per run. Derived, replayable with `scripts/backfill.sh`, deletable.
 
 Measured: cold start with an empty database and empty cache = 24 repositories / 6,993 commits in **4 m 12 s**, ~95 requests; warm run with nothing changed = **7 s**, 24/24 `skipped`, zero commit requests.
@@ -280,10 +280,16 @@ Two things about it are load-bearing:
   one workflow whose silence is indistinguishable from "nothing failed".
 
 It also **releases the failed run's lease**. A run that dies never reaches `Release Run Lock`, so its
-lease survives to the TTL and every tick in the window is refused with `another run holds the lease`.
-One transient DNS failure (`EAI_AGAIN`) therefore produced three failures: the crash, then two
-refusals. The delete is scoped to that execution's `run_id`, so a lease held by a *live* run is never
-cleared.
+lease survives to the TTL. The delete is scoped to that execution's `run_id`, so a lease held by a
+*live* run is never cleared.
+
+A refusal is no longer a failure. `Acquire Run Lock` returns `run_lock='held'` instead of throwing;
+`Lease Available?` routes that tick past the crawl, and the run is filed as `status='busy'` with null
+counters and a note naming the holder and its expiry. `Release Run Lock` early-returns unless the
+run's own lock says `acquired`, so a refused run cannot hand away a lease it never held. Before this
+change one transient `EAI_AGAIN` produced three red runs — the crash, then two refusals of a lease
+that was behaving exactly as designed. `busy` rows are contention; `error` rows are outages; a long
+streak of `busy` means a holder is stuck or renewing.
 
 Counts in an error row are `null`, never `0`: the run died before it knew them, and zero would read
 as "looked at nothing and found nothing".
@@ -395,5 +401,6 @@ Verify, do not assume:
 curl -s -o /dev/null -w '%{http_code}\n' -X POST \
   -H 'Content-Type: application/json' -d '{}' \
   http://127.0.0.1:5680/webhook/mnemora-commits
-# 500 = the workflow ran and rejected an empty payload. 404 = not published.
+# 401 = published and refusing an unsigned request, which is what this sends. 404 = not published.
+# A 500 here would mean the signature gate was bypassed and an empty payload reached the parser.
 ```
