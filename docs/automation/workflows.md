@@ -127,7 +127,7 @@ The main instance creates executions; **workers run them**. Anything a workflow 
 1. **Build Plan** reads `COLLECT_010_OWNERS`, `COLLECT_010_WINDOW_DAYS`, the optional token, and the fork/archived flags from the workflow's own `.env`.
 2. **Read State** asks Postgres what is already collected, through the read-only `mnemora_reader` role: `repository_id`, `full_name`, `pushed_at_utc`, `commit_count`, `source_state`, `archived_at_utc` and languages per repository. This replaced the two file-reading nodes. The cache files are no longer an input, so deleting them changes nothing about what a run decides. An unreachable database fails the run rather than being read as "nothing collected".
 3. **Collect** lists every **public** repository of those owners through `/users/:owner/repos`, then decides per repository: `skipped` when `pushed_at` matches the database row (zero requests), `full` when it moved, is new, or the history mode changed. A repository is re-fetched in full rather than merged — the commits are rows now, and prune-on-complete removes what vanished after a rewrite. `COLLECT_010_WINDOW_DAYS=0` means full history.
-4. **Pipe Batches → Save to Pipe** posts one record per repository to the persist webhook at `http://n8n:5678/webhook/mnemora-commits`. If that fails after retries, the run fails: data that was collected and never stored must not report success.
+4. **Collect posts each record** to the persist webhook at `http://n8n:5678/webhook/mnemora-commits` as that repository finishes (three attempts, two seconds apart). If a record cannot be persisted the run fails: data that was collected and never stored must not report success. Posting inside the loop is deliberate — a task timeout then costs at most the repository in flight, instead of the whole run's work.
 5. **To JSON File → Write Public Cache** writes the same records to `public/github-public-cache__<owner>__<repo>.json` as an **export**, and `collector-status.json` per run. Derived, replayable with `scripts/backfill.sh`, deletable.
 
 Measured: cold start with an empty database and empty cache = 24 repositories / 6,993 commits in **4 m 12 s**, ~95 requests; warm run with nothing changed = **7 s**, 24/24 `skipped`, zero commit requests.
@@ -193,6 +193,35 @@ curl -s -H "X-Mnemora-Token: $TOKEN" http://127.0.0.1:5680/webhook/mnemora-telem
 
 What to look at first when something is wrong: `health.last_run_age_seconds` (is it running at all?),
 `health.not_complete` (is anything stuck?), then `recent_issues` for the verbatim error.
+
+## Two ways a resumable crawl could still lose data
+
+**Skipping commits after a rewrite.** Pages are positions in a mutable list. If commits are added at
+the top, positions shift down and resuming re-covers a few already-seen commits — harmless, they are
+deduped by sha. If history is force-pushed **shorter**, positions shift up and resuming at the old
+cursor steps over commits. The crawl now stores `commit_boundary_sha` (the oldest commit it has
+confirmed) and, before resuming, re-reads the cursor page to check it is still there. Present → resume.
+Absent → start a new crawl at page 1 rather than skip anything.
+
+Measured on `Operator-Syn/peer-tutoring-platform` (5 pages, 402 commits):
+
+| seeded state | attempts | calls | outcome |
+|---|---|---|---|
+| boundary sha that is not on page 3 | `anchor-lost-restarted` | 8 (listing + anchor + languages + all 5 pages) | complete, 402 |
+| real boundary at the end of page 2 | `anchor-holds` | 6 (listing + anchor + languages + pages 3–5) | complete, 402, 202 seen |
+
+The anchor is a commit, not the branch head: the head changes whenever anything lands and would force
+a pointless restart, while new commits at the top cannot cause a skip.
+
+**Losing a run's pages to a timeout.** Posting per repository bounds the loss. A run-wide page budget
+(`COLLECT_010_MAX_PAGES_PER_RUN`, default 50 across *all* repositories) makes it unlikely in the first
+place: with ~1.2 s per page the spend is bounded well under the 600 s task timeout. Repositories left
+over are reported `deferred` and cost nothing; one caught mid-crawl keeps its cursor.
+
+Verified with the budget cut to 5: `arqen` stopped at page 5 with a cursor, `nixos-workstation` and
+`peer-tutoring-platform` were reported `deferred`, and the status file recorded
+`pages_spent: 5, budget: 5`. Restored to 50, the next run resumed `arqen` from page 6
+(`anchor-holds`) and completed it at 1,109 commits.
 
 ## A crawl that can be resumed
 
