@@ -7,6 +7,11 @@ Nothing here writes. Every statement filters `visibility = 'public'`, and the cr
 are the read-only ones — so a leaked URL, a hostile query string, or a bad edit can return the wrong
 public rows but cannot change a row or reach a private one.
 
+All four routes require the `X-Mnemora-Read-Key` header. The site is TanStack Start SSR on
+Cloudflare Workers, so the browser never calls this API — the Worker does, and the key lives in the
+Worker's secret store. That is the difference between a key and decoration: a key shipped to a
+browser is readable in DevTools, a key held by a server is not.
+
 ## Endpoints
 
 | endpoint | answers | notes |
@@ -50,12 +55,25 @@ keeps requests off an instance where every call is a workflow execution. Errors 
 
 | what | value | why |
 |---|---|---|
+| credential `Mnemora Read` (type `httpHeaderAuth`) | header `X-Mnemora-Read-Key`, value in the stack `.env` as `MNEMORA_READ_TOKEN` | the Webhook nodes require it; n8n answers `403` before the workflow runs. The canonical copies are this credential and the Cloudflare Worker secret |
 | credential `Mnemora DB (read-only)` (type `postgres`) | database `mnemora`, user `mnemora_reader` | every node uses it; the role can `SELECT` and cannot reach n8n's database |
-| published | yes | an unpublished webhook answers `404` and the dashboard sees nothing |
+| published | yes | an unpublished webhook answers `404` and the site sees nothing |
 
-No credential is needed by callers: the data is public GitHub activity, the stack publishes only on
-`127.0.0.1`, and the read role cannot write. The Webhook nodes set `allowedOrigins: '*'`; pin it to
-the frontend's origin once that origin exists, because `*` is a default, not a decision.
+Creating the read key credential (the value in `.env` is generated, 32 random bytes):
+
+```sh
+python3 -c 'import json,os;print(json.dumps([{"name":"Mnemora Read","type":"httpHeaderAuth","data":{"name":"X-Mnemora-Read-Key","value":os.environ["T"]}}]))' \
+  | T="$(grep -m1 '^MNEMORA_READ_TOKEN=' .env | cut -d= -f2-)" sh -c 'cat > /tmp/read-cred.json'
+docker compose cp /tmp/read-cred.json n8n:/tmp/read-cred.json
+docker compose exec -T n8n n8n import:credentials --input=/tmp/read-cred.json
+```
+
+The key is a secret, not an authenticity proof of the site: anyone who obtains it can call the API
+from anywhere. What actually bounds abuse is the rate limit and the response cache in
+`infra/nginx/mnemora-api.conf`, which is the deployment shape this API expects — nginx on the VPS
+exposing only `GET /webhook/api/*`, caching for 60 s, and limiting to 10 req/s per IP. The Worker's
+requests are server-to-server, so the Webhook nodes' CORS setting is irrelevant to them; it stays
+permissive rather than pinned because pinning it would imply a browser is a supported caller.
 
 This workflow deliberately has **no error workflow**. `notify-010-run-failures` writes a collector
 run row — lease ids, repository counts — and a failed read has none of those. A read failure should
@@ -84,17 +102,25 @@ never an injection.
 ## Try it
 
 ```sh
-curl -s 'http://127.0.0.1:5680/webhook/api/repos' | jq '.count, .repositories[0].full_name'
-curl -s 'http://127.0.0.1:5680/webhook/api/repository?id=Operator-Syn/arqen' | jq '.full_name, .source_state'
-curl -s 'http://127.0.0.1:5680/webhook/api/commits?limit=3' | jq '.returned, .next_before_ms'
+curl -s -H "X-Mnemora-Read-Key: $MNEMORA_READ_TOKEN" \
+  'http://127.0.0.1:5680/webhook/api/repos' | jq '.count, .repositories[0].full_name'
+curl -s -H "X-Mnemora-Read-Key: $MNEMORA_READ_TOKEN" \
+  'http://127.0.0.1:5680/webhook/api/repository?id=Operator-Syn/arqen' | jq '.full_name, .source_state'
+curl -s -H "X-Mnemora-Read-Key: $MNEMORA_READ_TOKEN" \
+  'http://127.0.0.1:5680/webhook/api/commits?limit=3' | jq '.returned, .next_before_ms'
 # then: .../commits?limit=3&before_ms=<that value>
-curl -s 'http://127.0.0.1:5680/webhook/api/commits?repository_id=Operator-Syn/arqen&limit=3' | jq '.returned'
-curl -s 'http://127.0.0.1:5680/webhook/api/activity?days=30' | jq '.window_days, .total'
-curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:5680/webhook/api/repository?id=nope'   # 404
+curl -s -H "X-Mnemora-Read-Key: $MNEMORA_READ_TOKEN" \
+  'http://127.0.0.1:5680/webhook/api/activity?days=30' | jq '.window_days, .total'
+
+# no key → 403 before the workflow runs; unknown repo → 404
+curl -s -o /dev/null -w '%{http_code}\n' 'http://127.0.0.1:5680/webhook/api/repos'
+curl -s -o /dev/null -w '%{http_code}\n' -H "X-Mnemora-Read-Key: $MNEMORA_READ_TOKEN" \
+  'http://127.0.0.1:5680/webhook/api/repository?id=nope'
 ```
 
 ## Related
 
+- `infra/nginx/mnemora-api.conf` — the VPS edge: path allowlist, rate limit, response cache
 - `db/migrations/0009_committed_at.sql` — the index the two feed endpoints depend on
 - `docs/product/requirements.md` — what the dashboard is allowed to show, and the public/private rule
 - `workflows/persist-010-commits-to-postgres/` — the write side
