@@ -17,7 +17,7 @@ That is the whole job: **discover repositories, describe each one, hand them ove
 
 ```
   [Manual Run]  ─┐
-                 ├─→ [Build Plan] → [Read State] → [Collect] ─┬─→ [Pipe Batches] → [Save to Pipe]
+                 ├─→ [Build Plan] → [Read State] → [Collect] ─┬─→ [Record Run]
   [Every Hour]┘        │              │            │       │                         ↓
                        settings      Postgres      GitHub     │                  persist-010
                                      (read-only)     API       └─→ [To JSON File] → [Write Public Cache]
@@ -143,35 +143,12 @@ yet" instead of "empty"; it cannot be pruned, because only `complete` records pr
 run treats `pending` exactly like new. A 24-repository cold start completes in two runs, and each
 one is safe to kill.
 
-## Step 5 — Pipe Batches: separate database records from the export
+## Step 5 — posting, inside Collect
 
-Records go to the pipeline. The run-status item carries the two things the pipeline needs that are
-not repository records — the repositories that vanished upstream (`archived_repository_ids`) and
-the pipe-only records (skipped and failed fetches). Keeping those out of the export branch
-preserves its one-to-one relationship with the files it writes; a Code node has only one output,
-so both branches hang off that single output.
-
-## Step 6 — Save to Pipe: hand them over
-
-One POST per record to `http://n8n:5678/webhook/mnemora-commits` — the compose-network address.
-
-Not `127.0.0.1:5680`. Inside a container that address is the container itself, and the call fails;
-the host port exists for your browser only. The worker image also has no `curl`, so any probe must
-use Node's `fetch` or n8n's own HTTP helper.
-
-If this fails after three retries the run fails. A run that fetched data and never stored it must
-not report success.
-
-## Step 6b — Record Run: the run leaves a trace
-
-The last thing a run does in the pipeline is file its own report in `mnemora_runs`: how many
-repositories it fetched, skipped, deferred or failed; how many commits the database accepted, added
-or pruned; how many API calls it spent; and how long it took.
-
-The counts are read, not guessed — repository outcomes from the status item Collect produced, commit
-numbers summed from persist's answers — and a failure to file the report does not fail the run,
-because the data is already stored. The per-run `collector-status.json` still exists as an export,
-but it is overwritten every run; this table is the history.
+There is no separate posting node. `Collect` posts each repository's record to the pipe the moment
+that repository finishes, retrying three times two seconds apart, and keeps the answers to total them
+for the run summary. The reason is the task timeout: anything still queued in a node's return value
+when it is killed is lost, including the resume cursors of repositories that were already fetched.
 
 ## Step 7 — the export
 
