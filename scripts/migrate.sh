@@ -42,6 +42,22 @@ shopt -s nullglob
 migrations=(db/migrations/*.sql)
 [ ${#migrations[@]} -gt 0 ] || { echo "no migrations found in db/migrations/"; exit 0; }
 
+# --rebaseline <version>: accept the current file as the applied text for one version.
+# Only for changes that cannot alter what ran — comments, whitespace, reordering a note. It exists so
+# that fixing a typo in a comment does not leave permanent drift, while still refusing to paper over
+# a real edit to a statement that already executed.
+if [ "$mode" = "--rebaseline" ]; then
+  version="${2:?usage: migrate.sh --rebaseline <version>}"
+  file="db/migrations/${version}.sql"
+  [ -f "$file" ] || { echo "no such migration: $file" >&2; exit 1; }
+  sum=$(checksum "$file")
+  db -c "update mnemora_schema_migrations set checksum = '$sum' where version = '$version';" >/dev/null
+  echo "rebaselined $version -> $sum"
+  echo "state the reason in the commit message: this records that the file's current text is"
+  echo "what the database already ran, and nobody should trust that claim silently."
+  exit 0
+fi
+
 applied=0; skipped=0; drift=0
 for file in "${migrations[@]}"; do
   version=$(basename "$file" .sql)
