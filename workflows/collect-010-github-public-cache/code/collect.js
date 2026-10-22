@@ -13,6 +13,33 @@ const STATUS_FILE = 'collector-status.json';
 const API = 'https://api.github.com';
 const httpGet = this.helpers.httpRequest.bind(this.helpers);
 
+// --- secrets ---------------------------------------------------------------------------------
+// Both secrets are read here, at request time, and never travel in a node's output. The Build Plan
+// node deliberately does not carry them: n8n persists failed executions, and an Authorization
+// header sitting in an item is a token sitting in the execution table.
+// biome-ignore lint/style/useNodejsImportProtocol: n8n's sandbox allowlist is the bare name `crypto`; `node:crypto` is not what NODE_FUNCTION_ALLOW_BUILTIN matches.
+const crypto = require('crypto');
+const pipeToken = typeof $env !== 'undefined' ? $env.MNEMORA_PIPE_TOKEN || '' : '';
+const ghToken = typeof $env !== 'undefined' ? $env.COLLECT_010_GITHUB_TOKEN || '' : '';
+const ghHeaders = { Accept: 'application/vnd.github+json', 'User-Agent': 'mnemora-collector' };
+if (ghToken) ghHeaders.Authorization = `Bearer ${ghToken}`;
+
+// The write pipe is authenticated by a signature, not by a reusable token: the request carries a
+// timestamp and an HMAC over `ts.action.identity`, and persist verifies it. A captured request
+// therefore proves nothing an hour later, and the stored execution contains no secret at all.
+function pipeAuth(action, identity) {
+  const ts = Math.floor(Date.now() / 1000);
+  const signature = crypto
+    .createHmac('sha256', pipeToken)
+    .update(`${ts}.${action}.${identity}`)
+    .digest('hex');
+  return {
+    'Content-Type': 'application/json',
+    'X-Mnemora-Timestamp': String(ts),
+    'X-Mnemora-Signature': signature,
+  };
+}
+
 // Tracks GitHub's remaining quota from response headers so the run can stop early
 // instead of burning the last calls and then failing on every remaining repository.
 let budget = null;
@@ -21,14 +48,23 @@ let budget = null;
 let apiCalls = 0;
 async function get(url, qs) {
   apiCalls++;
-  const res = await httpGet({
-    url,
-    qs,
-    headers: cfg.headers,
-    json: true,
-    timeout: 30000,
-    returnFullResponse: true,
-  });
+  let res;
+  try {
+    res = await httpGet({
+      url,
+      qs,
+      headers: ghHeaders,
+      json: true,
+      timeout: 30000,
+      returnFullResponse: true,
+    });
+  } catch (e) {
+    // Rethrow a string, not the error object: an n8n/axios error carries `config.headers`, which is
+    // exactly the secret we just stopped putting in items. The status and path are enough to debug.
+    const status = e?.statusCode || e?.httpCode;
+    const detail = status ? String(status) : String(e?.message || e);
+    throw new Error(`collect-010: GET ${url} failed: ${detail}`);
+  }
   const h = res.headers || {};
   const raw = h['x-ratelimit-remaining'] !== undefined ? h['x-ratelimit-remaining'] : h['X-RateLimit-Remaining'];
   if (raw !== undefined && raw !== null && !Number.isNaN(Number(raw))) budget = Number(raw);
@@ -48,17 +84,19 @@ const PIPE_URL = 'http://n8n:5678/webhook/mnemora-commits';
 const pipeResults = [];
 async function pipe(payload, label) {
   let lastError = null;
+  // n8n's webhook body is re-parsed by persist, so the signature binds the payload's *shape and
+  // identity*, not its bytes: a single record signs as `record`, a batch or archive list as `batch`.
+  // Body tampering is not the threat model here — credential reuse is.
+  const single = payload && typeof payload === 'object' && !Array.isArray(payload) && payload.repository_id != null;
+  const action = payload && Array.isArray(payload.archived_repository_ids) ? 'archive' : 'records';
+  const identity = single ? 'record' : 'batch';
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await this.helpers.httpRequest({
         method: 'POST',
         url: PIPE_URL,
         body: payload,
-        headers: {
-          'Content-Type': 'application/json',
-          // A Code node cannot hold an n8n credential; the pipe token comes from the environment.
-          'X-Mnemora-Pipe-Token': $env.MNEMORA_PIPE_TOKEN || '',
-        },
+        headers: pipeAuth(action, identity),
         json: true,
         timeout: 30000,
       });
