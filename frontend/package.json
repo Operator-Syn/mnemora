@@ -10,9 +10,8 @@
     "dev:worker": "npm run build && wrangler dev -c dist/server/wrangler.json",
     "generate-routes": "tsr generate",
     "build": "vite build",
-    "postbuild": "node -e \"require('node:fs').rmSync('dist/server/.dev.vars', { force: true })\"",
     "preview": "npm run build && vite preview",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "npm run build && node -e \"require('node:fs').rmSync('dist/server/.dev.vars',{force:true})\" && wrangler deploy",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
