@@ -4,6 +4,9 @@ Collects **every public repository** an account owns, with its **full commit his
 hands the records to `persist-010-commits-to-postgres`. The database is the product; a
 dashboard reads it instead of talking to GitHub itself.
 
+- **Resumable crawl:** a history larger than `MAX_COMMIT_PAGES` × 100 commits is collected over
+  several runs. Each run stores `commit_page_cursor`, and the next starts at `cursor + 1` instead
+  of page 1. The crawl id travels with the commit rows, so a finished crawl can prune exactly.
 - **Schedule:** hourly — GitHub's rate-limit window refreshes hourly, so an hourly pass keeps the
   database at most an hour stale for one listing call. Also on-demand via the `Manual Run` trigger.
 - **Writes (product):** nothing directly. It POSTs records to the persist webhook, which owns
