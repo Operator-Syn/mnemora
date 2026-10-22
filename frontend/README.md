@@ -27,11 +27,24 @@ and the server code runs under the same runtime rules as production. Verified in
 rendering `navigator.userAgent` server-side: it prints `Cloudflare-Workers`, and `MNEMORA_*` env keys
 are visible to the handler.
 
-If you want the *built* bundle under `wrangler dev` instead — no HMR, closer to a deploy:
+If you want the *built* bundle under `wrangler dev` instead — closer to a deploy:
 
 ```sh
 npm run dev:worker                 # build, then wrangler dev -c dist/server/wrangler.json
 ```
+
+**`wrangler dev` has no HMR.** Its only dev-time reloading is `--live-reload`, which refreshes the
+page when files change — a restart, not a module swap: component state is lost and no React Fast
+Refresh. HMR needs a module graph and update boundaries, which only Vite has. That is not a gap you
+can configure away; `@cloudflare/vite-plugin` exists to bridge exactly this, and it is why `npm run
+dev` is the loop to iterate in. `dev:worker` is for production parity (real bundle, real asset
+paths), not for editing.
+
+Measured here on `npm run dev`: a component edit lands in the live DOM in **~1.0 s** with
+`window` state intact (no reload), and editing a server module (`src/lib/mnemora.ts`) makes Vite
+hot-update `virtual:cloudflare/worker-entry` — the next SSR request renders the new code without
+restarting the worker.
+
 
 Both read `.dev.vars` for secrets. Neither puts the key in the browser bundle, because both execute
 the server functions in the Worker.
