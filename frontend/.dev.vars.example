@@ -1,0 +1,14 @@
+# Local secrets for `vite dev` (the Cloudflare plugin runs your Worker in workerd).
+# Copy to `.dev.vars` — it is gitignored, and it must never be committed.
+#
+# Production does not read this file: there the same names come from
+#   wrangler secret put MNEMORA_READ_KEY     (secret)
+#   wrangler.jsonc -> "vars"                 (non-secret, e.g. MNEMORA_API_URL)
+
+# Where the read API lives. On a laptop the n8n stack publishes 127.0.0.1:5680; in production this
+# is the public origin that nginx exposes (only GET /webhook/api/*, per infra/nginx/mnemora-api.conf).
+MNEMORA_API_URL=http://127.0.0.1:5680/webhook/api
+
+# The n8n credential is `Mnemora Read`; the same value is in the stack's .env as MNEMORA_READ_TOKEN.
+# Generate a fresh one for production rather than reusing your dev value.
+MNEMORA_READ_KEY=REPLACE_WITH_THE_VALUE_OF_MNEMORA_READ_TOKEN
