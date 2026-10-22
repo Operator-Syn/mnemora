@@ -26,7 +26,8 @@ repos as (
          nullif(r ->> 'commit_crawl_id', '') as crawl_id,
          coalesce((r ->> 'commit_crawl_complete')::boolean, false) as crawl_complete,
          coalesce((r ->> 'commit_page_cursor')::integer, 0) as page_cursor,
-         nullif(r ->> 'commit_crawl_started_at_utc', '')::timestamptz as crawl_started
+         nullif(r ->> 'commit_crawl_started_at_utc', '')::timestamptz as crawl_started,
+         nullif(r ->> 'commit_boundary_sha', '') as boundary_sha
   from payload, jsonb_array_elements(j -> 'repositories') as r
 ),
 archived_ids as (
@@ -39,7 +40,7 @@ upserted as (
     is_archived, html_url, pushed_at_utc, languages_bytes, history, commit_count,
     source_state, source_error, data_changed_at_utc, refreshed_at_utc,
     archived_at_utc, archived_reason,
-    commit_crawl_id, commit_page_cursor, commit_crawl_started_at_utc)
+    commit_crawl_id, commit_page_cursor, commit_crawl_started_at_utc, commit_boundary_sha)
   select
     rid,
     rec ->> 'full_name',
@@ -62,7 +63,8 @@ upserted as (
     -- crawl id stays only on the commit rows it confirmed, where the prune needs it.
     case when crawl_complete then null else crawl_id end,
     case when crawl_complete then 0 else page_cursor end,
-    case when crawl_complete then null else crawl_started end
+    case when crawl_complete then null else crawl_started end,
+    case when crawl_complete then null else boundary_sha end
   from repos
   on conflict (repository_id) do update set
     full_name = excluded.full_name,
@@ -89,7 +91,8 @@ upserted as (
     refreshed_at_utc = excluded.refreshed_at_utc,
     commit_crawl_id = excluded.commit_crawl_id,
     commit_page_cursor = excluded.commit_page_cursor,
-    commit_crawl_started_at_utc = excluded.commit_crawl_started_at_utc
+    commit_crawl_started_at_utc = excluded.commit_crawl_started_at_utc,
+    commit_boundary_sha = excluded.commit_boundary_sha
   returning repository_id
 ),
 archived as (
