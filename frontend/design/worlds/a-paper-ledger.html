@@ -6,14 +6,14 @@
 <title>World A — Paper Ledger</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Chivo:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 <style>
   :root{
-    --paper:#F2EFE4; --ink:#141414; --acid:#E4FF3F; --blue:#2B4CFF; --red:#FF4B2B;
+    --paper:#FAFAF5; --ink:#141414; --acid:#E4FF3F; --blue:#2B4CFF; --red:#FF4B2B;
     --rule:3px solid var(--ink); --shadow:8px 8px 0 var(--ink);
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Space Grotesk",system-ui,sans-serif;
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Chivo",system-ui,sans-serif;
        background-image:radial-gradient(var(--ink) 1px, transparent 1px);background-size:16px 16px;}
   .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
   header{border-bottom:var(--rule);background:var(--acid);position:sticky;top:0;z-index:5}
@@ -28,7 +28,7 @@
   h1 mark{background:var(--blue);color:var(--paper);padding:0 10px;box-decoration-break:clone}
   .deck{font-size:19px;line-height:1.45;max-width:52ch;margin:0 0 14px;font-weight:500}
   .stamp{display:inline-block;font-family:"Space Mono",monospace;font-size:12px;text-transform:uppercase;
-         border:var(--rule);padding:6px 10px;background:var(--red);color:var(--paper);box-shadow:4px 4px 0 var(--ink)}
+         border:var(--rule);padding:6px 10px;background:var(--red);color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
   .ticket{border:var(--rule);background:var(--paper);box-shadow:var(--shadow);padding:18px}
   .ticket h2{font-family:"Space Mono",monospace;font-size:12px;text-transform:uppercase;letter-spacing:.14em;margin:0 0 14px}
   .lang{display:grid;grid-template-columns:96px 1fr 44px;gap:10px;align-items:center;margin-bottom:9px;font-size:13px}
@@ -38,7 +38,7 @@
   .pct{font-family:"Space Mono",monospace;text-align:right}
   .section-head{display:flex;align-items:baseline;gap:14px;border-bottom:var(--rule);padding-bottom:10px;margin:34px 0 0}
   .section-head h2{font-family:"Archivo Black",sans-serif;font-size:22px;margin:0;text-transform:uppercase;letter-spacing:-.01em}
-  .section-head span{font-family:"Space Mono",monospace;font-size:12px;margin-left:auto;text-transform:uppercase}
+  .section-head span{font-family:"Space Mono",monospace;font-size:12.5px;margin-left:auto}
   table{width:100%;border-collapse:collapse;margin-top:0}
   th,td{text-align:left;padding:13px 8px;border-bottom:2px solid var(--ink);vertical-align:baseline}
   th{font-family:"Space Mono",monospace;font-size:11px;text-transform:uppercase;letter-spacing:.12em}
@@ -82,12 +82,13 @@
       <div class="lang"><span>JavaScript</span><span class="track"><span class="fill alt2" style="width:7%"></span></span><span class="pct">7%</span></div>
       <div class="lang"><span>Python</span><span class="track"><span class="fill alt" style="width:6%"></span></span><span class="pct">6%</span></div>
       <div class="lang"><span>Rust</span><span class="track"><span class="fill" style="width:6%"></span></span><span class="pct">6%</span></div>
+      <div class="lang"><span>Other</span><span class="track"><span class="fill alt" style="width:13%"></span></span><span class="pct">13%</span></div>
     </aside>
   </section>
 
   <div class="section-head">
     <h2>The ledger</h2>
-    <span>Newest push first</span>
+    <span>Newest push first &middot; 8 of 25 shown</span>
   </div>
 
   <table>
@@ -95,13 +96,13 @@
       <tr><th>Repository</th><th style="text-align:right">Commits</th><th style="text-align:right">Pushed</th></tr>
     </thead>
     <tbody>
-      <tr><td class="name"><a href="#">Operator-Syn/operator-synaciel</a><p class="desc">The Operator-Syn site portfolio</p></td><td class="num">2,889</td><td class="num">2026-10-20</td></tr>
-      <tr><td class="name"><a href="#">Operator-Syn/PvZ-Portable-Modded-</a><p class="desc">Cross-platform reimplementation of Plants vs. Zombies</p></td><td class="num">1,123</td><td class="num">2026-10-03</td></tr>
-      <tr><td class="name"><a href="#">Operator-Syn/arqen</a><p class="desc">Dockerized Gmail MCP server with automatic OpenBao setup</p></td><td class="num">1,109</td><td class="num">2026-10-18</td></tr>
+      <tr><td class="name"><a href="#">Operator-Syn/mnemora</a><p class="desc">The collector, store and API this page is reading</p></td><td class="num">231</td><td class="num">today</td></tr>
+      <tr><td class="name"><a href="#">Operator-Syn/operator-synaciel</a><p class="desc">The Operator-Syn site portfolio.</p></td><td class="num">2,889</td><td class="num">2026-10-20</td></tr>
       <tr><td class="name"><a href="#">Operator-Syn/nixos-workstation</a><p class="desc">Declarative NixOS configuration</p></td><td class="num">696</td><td class="num">2026-10-19</td></tr>
+      <tr><td class="name"><a href="#">Operator-Syn/arqen</a><p class="desc">Dockerized Gmail MCP server with automatic OpenBao setup</p></td><td class="num">1,109</td><td class="num">2026-10-18</td></tr>
+      <tr><td class="name"><a href="#">Operator-Syn/PvZ-Portable-Modded-</a><p class="desc">Cross-platform reimplementation of Plants vs. Zombies</p></td><td class="num">1,123</td><td class="num">2026-10-03</td></tr>
       <tr><td class="name"><a href="#">Operator-Syn/peer-tutoring-platform</a><p class="desc">Students as tutors and tutees, with scheduling and verification</p></td><td class="num">402</td><td class="num">2026-03-14</td></tr>
       <tr><td class="name"><a href="#">Operator-Syn/CCC151-Group--BH-Management-System</a><p class="desc">Final project for CCC151</p></td><td class="num">360</td><td class="num">2025-05-28</td></tr>
-      <tr><td class="name"><a href="#">Operator-Syn/mnemora</a><p class="desc">The collector, store and API this page is reading</p></td><td class="num">231</td><td class="num">1 h ago</td></tr>
       <tr><td class="name"><a href="#">Operator-Syn/SSIS-Web-Application-Version</a><p class="desc">Student information system, browser edition</p></td><td class="num">34</td><td class="num">2025-12-22</td></tr>
     </tbody>
   </table>

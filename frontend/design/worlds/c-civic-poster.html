@@ -9,16 +9,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Public+Sans:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <style>
   :root{
-    --paper:#EDE6D6; --ink:#12100E; --tomato:#FF3B1F; --cobalt:#1B3BFF; --sun:#FFC400;
+    --paper:#FFFDF5; --ink:#12100E; --tomato:#FF3B1F; --cobalt:#1B3BFF; --sun:#FFC400;
     --rule:3px solid var(--ink); --shadow:10px 10px 0 var(--ink);
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif}
+  body{margin:0;background:var(--sun);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif}
   .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
-  .masthead{border-bottom:var(--rule);background:var(--paper)}
+  .masthead{border-bottom:var(--rule);background:var(--paper);padding:0 16px}
   .masthead .wrap{display:flex;align-items:center;gap:18px;padding:12px 0;flex-wrap:wrap}
   .mark{font-family:"Anton",sans-serif;font-size:30px;letter-spacing:.01em;text-transform:uppercase;line-height:1}
-  .mark span{background:var(--tomato);color:var(--paper);padding:2px 6px}
+  .mark span{background:var(--tomato);color:var(--ink);padding:2px 6px}
   .issue{font-family:"IBM Plex Mono",monospace;font-size:11px;text-transform:uppercase;letter-spacing:.14em;
          border:2px solid var(--ink);padding:4px 8px;background:var(--sun)}
   nav{margin-left:auto;display:flex;gap:18px;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.03em}
@@ -49,8 +49,8 @@
   .card{border:var(--rule);background:var(--paper);padding:14px 15px 12px;box-shadow:6px 6px 0 var(--ink);position:relative}
   .card:nth-child(3n+1){transform:rotate(-.7deg)} .card:nth-child(3n+2){transform:rotate(.5deg)} .card:nth-child(3n){transform:rotate(-.35deg)}
   .card:hover{transform:rotate(0) translate(-2px,-2px);box-shadow:9px 9px 0 var(--cobalt)}
-  .card .tag{position:absolute;top:-9px;right:10px;background:var(--tomato);color:var(--paper);
-             font-family:"IBM Plex Mono",monospace;font-size:10px;padding:1px 6px;border:2px solid var(--ink);text-transform:uppercase}
+  .card .tag{position:absolute;top:-9px;right:10px;background:var(--tomato);color:var(--ink);
+             font-family:"IBM Plex Mono",monospace;font-size:11.5px;padding:1px 6px;border:2px solid var(--ink);text-transform:uppercase}
   .card h3{font-family:"Anton",sans-serif;font-size:17px;margin:6px 0 6px;text-transform:uppercase;letter-spacing:.01em;line-height:1.05;word-break:break-word}
   .card h3 a{color:var(--ink);text-decoration:none;border-bottom:3px solid var(--sun)}
   .card h3 a:hover{background:var(--ink);color:var(--paper)}
@@ -59,7 +59,7 @@
               border-top:2px solid var(--ink);padding-top:7px}
   footer{margin-top:40px;border-top:var(--rule);background:var(--cobalt);color:var(--paper);padding:18px 0}
   footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:12.5px;font-family:"IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.08em}
-  footer a{color:var(--sun);text-decoration:none;border-bottom:2px solid var(--sun)}
+  footer a{color:var(--paper);text-decoration:none;border-bottom:2px solid var(--sun)}
   @media(max-width:900px){.row,.cards{grid-template-columns:1fr}nav{display:none}.tape{display:none}}
 </style>
 </head>
@@ -107,6 +107,7 @@
           <span><i class="sw" style="background:#12100E"></i>JavaScript 7%</span>
           <span><i class="sw" style="background:#7A8B00"></i>Python 6%</span>
           <span><i class="sw" style="background:#8A5CFF"></i>Rust 6%</span>
+          <span><i class="sw" style="background:#C9C2B0"></i>Other 13%</span>
         </div>
       </div>
     </div>
