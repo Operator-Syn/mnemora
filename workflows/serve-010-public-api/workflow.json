@@ -114,7 +114,7 @@
     {
       "id": "c1a0f0a0-0001-4000-8000-000000000001",
       "name": "GET repos",
-      "notes": "The index. `?include_archived=true` adds archived repositories; they are hidden by default because a portfolio is a claim about current work.\n\nEvery route here is public and unauthenticated: the data is the account's public GitHub activity and the stack publishes only on 127.0.0.1. CORS is '*'; pin it to the frontend's origin once that origin exists.",
+      "notes": "The index. `?include_archived=true` adds archived repositories; they are hidden by default because a portfolio is a claim about current work.\n\nAll four routes require the `X-Mnemora-Read-Key` header (credential `Mnemora Read`). The only legitimate caller is the site's SSR runtime, so the key lives in the server's secret store and never reaches a browser \u2014 that is what makes it a secret rather than decoration.",
       "notesInFlow": true,
       "parameters": {
         "httpMethod": "GET",
@@ -122,7 +122,8 @@
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
-        }
+        },
+        "authentication": "headerAuth"
       },
       "position": [
         -260,
@@ -130,12 +131,18 @@
       ],
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "webhookId": "serve010-api-repos"
+      "webhookId": "serve010-api-repos",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5vRYCAvEU9cbfMUZ",
+          "name": "Mnemora Read"
+        }
+      }
     },
     {
       "id": "c1a0f0a0-0002-4000-8000-000000000002",
       "name": "GET repository",
-      "notes": "One repository. The key is `?id=` and accepts the numeric repository_id or `owner/name` \u2014 a dashboard links by name, a script by id.\n\nNot `/api/repos/:id`: n8n advertises path parameters, but its lookup keys dynamic webhooks on the request's FIRST segment being the webhook id, so `/api/repos/123` registers and then never matches. Verified live; query strings it is.",
+      "notes": "One repository. The key is `?id=` and accepts the numeric repository_id or `owner/name` \u2014 a dashboard links by name, a script by id.\n\nNot `/api/repos/:id`: n8n advertises path parameters, but its lookup keys dynamic webhooks on the request's FIRST segment being the webhook id, so `/api/repos/123` registers and then never matches. Verified live; query strings it is.\n\nRequires the `X-Mnemora-Read-Key` header (credential `Mnemora Read`); n8n answers 403 before the workflow runs if it is missing or wrong.",
       "notesInFlow": true,
       "parameters": {
         "httpMethod": "GET",
@@ -143,7 +150,8 @@
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
-        }
+        },
+        "authentication": "headerAuth"
       },
       "position": [
         -260,
@@ -151,12 +159,18 @@
       ],
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "webhookId": "serve010-api-repository"
+      "webhookId": "serve010-api-repository",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5vRYCAvEU9cbfMUZ",
+          "name": "Mnemora Read"
+        }
+      }
     },
     {
       "id": "c1a0f0a0-0003-4000-8000-000000000003",
       "name": "GET commits",
-      "notes": "Commits newest first, either across every repository or scoped with `?repository_id=owner/name` (or a numeric id). `?limit=` 1..200, default 50; `?before=` is the cursor from the previous page's next_before.\n\nOne route for both feeds because they differ by a single predicate.",
+      "notes": "Commits newest first, either across every repository or scoped with `?repository_id=owner/name` (or a numeric id). `?limit=` 1..200, default 50; `?before=` is the cursor from the previous page's next_before.\n\nOne route for both feeds because they differ by a single predicate.\n\nRequires the `X-Mnemora-Read-Key` header (credential `Mnemora Read`); n8n answers 403 before the workflow runs if it is missing or wrong.",
       "notesInFlow": true,
       "parameters": {
         "httpMethod": "GET",
@@ -164,7 +178,8 @@
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
-        }
+        },
+        "authentication": "headerAuth"
       },
       "position": [
         -260,
@@ -172,12 +187,18 @@
       ],
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "webhookId": "serve010-api-commits"
+      "webhookId": "serve010-api-commits",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5vRYCAvEU9cbfMUZ",
+          "name": "Mnemora Read"
+        }
+      }
     },
     {
       "id": "c1a0f0a0-0004-4000-8000-000000000004",
       "name": "GET activity",
-      "notes": "Commits per day over `?days=` (1..365, default 90), for a heatmap or a totals strip.",
+      "notes": "Commits per day over `?days=` (1..365, default 90), for a heatmap or a totals strip.\n\nRequires the `X-Mnemora-Read-Key` header (credential `Mnemora Read`); n8n answers 403 before the workflow runs if it is missing or wrong.",
       "notesInFlow": true,
       "parameters": {
         "httpMethod": "GET",
@@ -185,7 +206,8 @@
         "responseMode": "responseNode",
         "options": {
           "allowedOrigins": "*"
-        }
+        },
+        "authentication": "headerAuth"
       },
       "position": [
         -260,
@@ -193,7 +215,13 @@
       ],
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "webhookId": "serve010-api-activity"
+      "webhookId": "serve010-api-activity",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "5vRYCAvEU9cbfMUZ",
+          "name": "Mnemora Read"
+        }
+      }
     },
     {
       "credentials": {
