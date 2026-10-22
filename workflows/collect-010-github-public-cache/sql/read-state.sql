@@ -4,7 +4,7 @@
 -- the resume point; both are null/zero when no crawl is open.
 select r.repository_id, r.full_name, r.pushed_at_utc, r.commit_count, r.source_state,
        r.source_error, r.history, r.default_branch, r.data_changed_at_utc, r.archived_at_utc,
-       r.languages_bytes, r.commit_crawl_id, r.commit_page_cursor,
+       r.languages_bytes, r.commit_crawl_id, r.commit_page_cursor, r.commit_boundary_sha,
        r.commit_crawl_started_at_utc,
        (select count(*) from mnemora_commits mc where mc.repository_id = r.repository_id) as commit_rows,
        -- Rows this crawl has already confirmed. Counting every row would double-count commits
