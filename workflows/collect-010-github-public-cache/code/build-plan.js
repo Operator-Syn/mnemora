@@ -30,10 +30,11 @@ const maxNewPerRun = Number(env('COLLECT_010_MAX_NEW_PER_RUN', 12));
 // Ceiling on commit pages for the whole run, not per repository: it bounds how long one execution
 // can take, so a timeout cannot swallow a long crawl. Leftovers resume from their cursors.
 const maxPagesPerRun = Number(env('COLLECT_010_MAX_PAGES_PER_RUN', 50));
-const token = env('COLLECT_010_GITHUB_TOKEN', '');
+// Presence only: this node decides whether the run is authenticated, it never handles the value.
+// The token itself is read by the Collect node at request time. Copying it into this node's output
+// would put it in every downstream item — and n8n persists failed executions, headers included.
+const hasToken = env('COLLECT_010_GITHUB_TOKEN', '') !== '';
 
-const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'mnemora-collector' };
-if (token) headers.Authorization = `Bearer ${token}`;
 
 const now = new Date();
 const until = now.toISOString();
@@ -51,7 +52,7 @@ return [
       forceFull,
       rateReserve,
   maxNewPerRun,
-      headers,
+      github_token_present: hasToken,
       includeForks: flag('COLLECT_010_INCLUDE_FORKS', true),
       includeArchived: flag('COLLECT_010_INCLUDE_ARCHIVED', true),
       maxPagesPerRun,
