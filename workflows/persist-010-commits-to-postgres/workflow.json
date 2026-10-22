@@ -6,7 +6,7 @@
         [
           {
             "index": 0,
-            "node": "Validate Payload",
+            "node": "Verify Signature",
             "type": "main"
           }
         ]
@@ -91,6 +91,35 @@
           }
         ]
       ]
+    },
+    "Verify Signature": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Signature Valid?",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Validate Payload",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Reject Unauthenticated",
+            "type": "main"
+          }
+        ]
+      ]
     }
   },
   "id": "NJ41NcmooiuniEuo",
@@ -99,13 +128,12 @@
     {
       "id": "a1f0c1a0-0001-4000-8000-000000000001",
       "name": "Commits In (Webhook)",
-      "notes": "Authenticated write endpoint: POST /webhook/mnemora-commits requires the X-Mnemora-Pipe-Token header. Without it n8n answers 403 before the workflow runs, so nothing on this machine can write rows merely by reaching the port. The token lives in the 'Mnemora Pipe' credential and in the stack .env as MNEMORA_PIPE_TOKEN for scripts.",
+      "notes": "Signed write endpoint: POST /webhook/mnemora-commits must carry X-Mnemora-Timestamp and X-Mnemora-Signature, an HMAC-SHA256 over `ts.action.identity` with MNEMORA_PIPE_TOKEN. n8n's built-in header auth is deliberately off: it accepted one long-lived token, and this workflow persists request headers, so that token ended up in its own execution data. A signature is valid for 60 seconds and is not a credential.",
       "parameters": {
         "httpMethod": "POST",
         "options": {},
         "path": "mnemora-commits",
-        "responseMode": "responseNode",
-        "authentication": "headerAuth"
+        "responseMode": "responseNode"
       },
       "position": [
         -220,
@@ -113,13 +141,7 @@
       ],
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "webhookId": "mnemora-commits-in",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "jhB00dXqTKDjYtiQ",
-          "name": "Mnemora Pipe"
-        }
-      }
+      "webhookId": "mnemora-commits-in"
     },
     {
       "id": "a1f0c1a0-0002-4000-8000-000000000002",
@@ -290,6 +312,75 @@
       ],
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4
+    },
+    {
+      "id": "a1f0c1a0-0009-4000-8000-000000000009",
+      "name": "Verify Signature",
+      "notes": "Checks the HMAC before any SQL runs and before the body is trusted. Derives the signed action/identity from the payload shape, enforces a 60-second timestamp window, and compares in constant time. Its output deliberately drops the request headers: they are no longer needed downstream and they are what used to leak a credential into execution data.",
+      "notesInFlow": true,
+      "parameters": {
+        "jsCode": "@file:code/verify-signature.js"
+      },
+      "position": [
+        -220,
+        220
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "id": "a1f0c1a0-0010-4000-8000-000000000010",
+      "name": "Signature Valid?",
+      "notes": "An unsigned or stale request leaves through the false output and gets 401. Kept as a branch rather than a thrown error so the caller receives a status and a reason instead of n8n's generic 500.",
+      "notesInFlow": true,
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "signature-ok",
+              "leftValue": "={{ $json.signature_ok }}",
+              "operator": {
+                "operation": "equals",
+                "type": "boolean"
+              },
+              "rightValue": true
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "position": [
+        -40,
+        220
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4
+    },
+    {
+      "id": "a1f0c1a0-0011-4000-8000-000000000011",
+      "name": "Reject Unauthenticated",
+      "notes": "Answers 401 with the verification reason and the action/identity the verifier derived \u2014 enough for a caller to fix its signing, and nothing that helps someone who does not hold the secret. responseCode lives under options in this node version; a top-level responseCode is accepted by the editor and silently ignored at runtime, which answers 200 with an error body.",
+      "notesInFlow": true,
+      "parameters": {
+        "options": {
+          "responseCode": 401
+        },
+        "respondWith": "json",
+        "responseBody": "={{ { error: 'unauthorized', reason: $json.reason, action: $json.action, identity: $json.identity } }}"
+      },
+      "position": [
+        160,
+        220
+      ],
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1
     }
   ],
   "settings": {
