@@ -10,7 +10,7 @@ const mode = (m) => rows.filter((r) => r.collection === m).length;
 
 let commitsSeen = 0, commitsNew = 0, commitsPruned = 0;
 for (const item of $('Save to Pipe').all()) {
-  const j = (item && item.json) || {};
+  const j = (item?.json) || {};
   // Only repository responses carry these; the archive batch answers with its own shape.
   if (typeof j.commits_seen !== 'number') continue;
   commitsSeen += Number(j.commits_seen) || 0;
@@ -44,7 +44,7 @@ const summary = {
   // unexecuted node throws, which is the signal.
   trigger_mode: (() => {
     const fired = (name) => {
-      try { return !!($(name) && $(name).first() !== undefined); } catch (e) { return false; }
+      try { return !!($(name) && $(name).first() !== undefined); } catch (_e) { return false; }
     };
     if (fired('Every Hour')) return 'schedule';
     if (fired('Manual Run')) return 'manual';
