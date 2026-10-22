@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
-import type { RepositoryIndex } from '../lib/mnemora'
+import type { Repository, RepositoryIndex } from '../lib/mnemora'
 
 export const Route = createFileRoute('/')({
   // Runs in the Worker on every request (and again on client navigations, where the server
@@ -8,6 +8,22 @@ export const Route = createFileRoute('/')({
   loader: () => getRepositoryIndex(),
   component: Home,
 })
+
+/**
+ * Bar fills, in ranked order. The first four are tokens so they invert with the theme; a hard
+ * #12100e swatch vanished against the dark panel. The rest are mid-tone hues that hold up on
+ * both papers.
+ */
+const STACK_COLOURS = [
+  'var(--tomato)',
+  'var(--cobalt)',
+  'var(--sun)',
+  'var(--ink)',
+  '#7a8b00',
+  '#8a5cff',
+  '#c9c2b0',
+  '#0f6b5c',
+]
 
 function formatDate(value: string | null): string {
   if (!value) return 'never'
@@ -19,42 +35,60 @@ function formatDate(value: string | null): string {
   return date.toISOString().slice(0, 10)
 }
 
-function headline(data: RepositoryIndex): string {
-  if (!data.ok) return 'Repository data is unavailable.'
-  if (data.repositories.length === 0) return 'No public repositories yet.'
-  return `${data.repositories.length} repositories, ${data.totalCommits.toLocaleString()} commits.`
+function topLanguage(repo: Repository): string {
+  const entries = Object.entries(repo.languages_bytes ?? {})
+  if (entries.length === 0) return 'no languages indexed'
+  return entries.sort((a, b) => b[1] - a[1])[0][0]
 }
 
 function Home() {
   const data = Route.useLoaderData() as RepositoryIndex
   const isEmpty = data.ok && data.repositories.length === 0
+  const byCommits = [...data.repositories].sort((a, b) => (b.commit_count ?? 0) - (a.commit_count ?? 0))
+  const mostRecent = byCommits.reduce<Repository | null>(
+    (best, repo) =>
+      repo.pushed_at_utc && (!best || (best.pushed_at_utc ?? '') < repo.pushed_at_utc) ? repo : best,
+    null,
+  )
 
   return (
-    <main className="page-wrap px-4 pb-8 pt-14">
-      <section className="island-shell rise-in relative overflow-hidden rounded-[2rem] px-6 py-10 sm:px-10 sm:py-14">
-        <div className="pointer-events-none absolute -left-20 -top-24 h-56 w-56 rounded-full bg-[radial-gradient(circle,rgba(79,184,178,0.32),transparent_66%)]" />
-        <h1 className="display-title mb-4 max-w-3xl text-4xl leading-[1.02] font-bold tracking-tight text-[var(--sea-ink)] sm:text-6xl">
-          {headline(data)}
+    <main className="page-wrap">
+      <section className="poster">
+        {data.ok && <div className="stamp">Refreshed {formatDate(data.refreshedAt)}</div>}
+
+        <h1>
+          {!data.ok && (
+            <>
+              <span className="hl">Repository</span> data is unavailable.
+            </>
+          )}
+          {isEmpty && (
+            <>
+              <span className="hl">No</span> public repositories yet.
+            </>
+          )}
+          {data.ok && !isEmpty && (
+            <>
+              <span className="hl">{data.repositories.length}</span> repositories,{' '}
+              <span className="hl alt">{data.totalCommits.toLocaleString()}</span> commits.
+            </>
+          )}
         </h1>
-        <p className="mb-2 max-w-2xl text-base text-[var(--sea-ink-soft)] sm:text-lg">
+
+        <p className="lede">
           Collected from GitHub by an hourly job, stored in Postgres, served by a read-only API.
           Every number here is a row, not an estimate.
         </p>
-        {data.ok && (
-          <p className="m-0 text-sm text-[var(--sea-ink-soft)]">
-            Data refreshed {formatDate(data.refreshedAt)}.
-          </p>
-        )}
 
         {!data.ok && (
-          <div className="mt-6 rounded-2xl border border-[var(--line)] bg-[var(--chip-bg)] p-5">
-            <p className="m-0 text-[var(--sea-ink)]">The feed isn&rsquo;t answering this minute.</p>
-            <p className="m-0 mt-1 max-w-xl text-sm text-[var(--sea-ink-soft)]">
+          <div className="state" role="status">
+            <p>The feed isn&rsquo;t answering this minute.</p>
+            <p>
               The collector runs hourly on its own, so this fills in without anyone touching it.
               Reload in a minute or two.
             </p>
             {import.meta.env.DEV && (
-              <p className="m-0 mt-3 border-t border-[var(--line)] pt-3 font-mono text-xs leading-relaxed break-words text-[var(--sea-ink-soft)]">
+              <p className="diag">
                 dev only &middot; {data.kind ?? 'unknown'} &middot; {data.reason}
               </p>
             )}
@@ -62,62 +96,96 @@ function Home() {
         )}
 
         {isEmpty && (
-          <p className="m-0 mt-4 max-w-xl text-sm text-[var(--sea-ink-soft)]">
-            The collector runs hourly; the first pass that finds public repositories will fill this
-            in.
-          </p>
+          <div className="state">
+            <p>The collector runs hourly.</p>
+            <p>The first pass that finds public repositories will fill this in.</p>
+          </div>
+        )}
+
+        {data.ok && !isEmpty && (
+          <>
+            <div className="poster-grid">
+              <div className="panel">
+                <h2>By the numbers</h2>
+                <div className="kv">
+                  <span>Public repositories</span>
+                  <b>{data.repositories.length}</b>
+                </div>
+                <div className="kv">
+                  <span>Commits recorded</span>
+                  <b>{data.totalCommits.toLocaleString()}</b>
+                </div>
+                <div className="kv">
+                  <span>Languages</span>
+                  <b>{data.languages.length}</b>
+                </div>
+                <div className="kv">
+                  <span>Last refresh</span>
+                  <b>{formatDate(data.refreshedAt)}</b>
+                </div>
+                <div className="kv">
+                  <span>Most recent push</span>
+                  <b>
+                    {mostRecent
+                      ? `${mostRecent.full_name.split('/')[1]} · ${formatDate(mostRecent.pushed_at_utc)}`
+                      : '—'}
+                  </b>
+                </div>
+              </div>
+
+              <div className="panel">
+                <h2>Language mix / bytes</h2>
+                <div className="stack">
+                  {data.languages.map((language, index) => (
+                    <i
+                      key={language.name}
+                      style={{
+                        width: `${Math.max(language.share * 100, 0.5)}%`,
+                        background: STACK_COLOURS[index % STACK_COLOURS.length],
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="legend">
+                  {data.languages.map((language, index) => (
+                    <span key={language.name}>
+                      <i
+                        className="sw"
+                        style={{ background: STACK_COLOURS[index % STACK_COLOURS.length] }}
+                      />
+                      {language.name} {(language.share * 100).toFixed(0)}%
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <section className="repos">
+              <div className="repos-head">
+                <h2>Public repositories</h2>
+                <span className="repos-note">{byCommits.length} shown · most commits first</span>
+              </div>
+              <div className="cards">
+                {byCommits.map((repo) => (
+                  <article key={repo.repository_id} className="card">
+                    <span className="card-tag">{repo.commit_count ?? 0}</span>
+                    <h3>
+                      <a href={repo.html_url} target="_blank" rel="noopener noreferrer">
+                        {repo.full_name.split('/')[1]}
+                      </a>
+                    </h3>
+                    <p>{repo.description ?? 'No description on GitHub.'}</p>
+                    <div className="card-foot">
+                      <span>{formatDate(repo.pushed_at_utc)}</span>
+                      <span>{repo.archived ? 'archived' : topLanguage(repo)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </>
         )}
       </section>
-
-      {data.languages.length > 0 && (
-        <section className="island-shell mt-8 rounded-2xl p-6">
-          <h2 className="m-0 mb-4 text-sm font-semibold tracking-wide text-[var(--sea-ink)] uppercase">
-            Languages, by bytes written
-          </h2>
-          <ul className="m-0 grid list-none gap-2 p-0 sm:grid-cols-2">
-            {data.languages.map((language) => (
-              <li key={language.name} className="flex items-center gap-3 text-sm">
-                <span className="w-28 shrink-0 text-[var(--sea-ink)]">{language.name}</span>
-                <span className="h-2 flex-1 overflow-hidden rounded-full bg-[rgba(23,58,64,0.12)]">
-                  <span
-                    className="block h-full rounded-full bg-[var(--lagoon-deep)]"
-                    style={{ width: `${Math.max(language.share * 100, 1)}%` }}
-                  />
-                </span>
-                <span className="w-12 shrink-0 text-right tabular-nums text-[var(--sea-ink-soft)]">
-                  {(language.share * 100).toFixed(0)}%
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {data.repositories.length > 0 && (
-        <section className="mt-8 grid gap-4 sm:grid-cols-2">
-          {data.repositories.map((repo) => (
-            <article key={repo.repository_id} className="island-shell feature-card rounded-2xl p-5">
-              <h2 className="mb-1 text-base font-semibold text-[var(--sea-ink)]">
-                <a
-                  href={repo.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="no-underline hover:underline"
-                >
-                  {repo.full_name}
-                </a>
-              </h2>
-              <p className="m-0 mb-3 text-sm text-[var(--sea-ink-soft)]">
-                {repo.description ?? 'No description on GitHub.'}
-              </p>
-              <p className="m-0 text-xs text-[var(--sea-ink-soft)]">
-                {repo.commit_count ?? 0} commits &middot; pushed {formatDate(repo.pushed_at_utc)}
-                {repo.archived && ' · archived'}
-              </p>
-            </article>
-          ))}
-        </section>
-      )}
     </main>
   )
 }
