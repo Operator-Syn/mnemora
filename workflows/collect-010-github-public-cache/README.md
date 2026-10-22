@@ -25,7 +25,7 @@ dashboard reads it instead of talking to GitHub itself.
 | what | value | why |
 |---|---|---|
 | credential `Mnemora DB (read-only)` (type `postgres`) | database `mnemora`, user `mnemora_reader` | `Read State` decides what to fetch; the role can `SELECT` only and cannot reach n8n's database |
-| credential `Mnemora Pipe` (type `httpHeaderAuth`) | header `X-Mnemora-Pipe-Token` | `Save to Pipe` must authenticate to `persist-010`, which answers `403` without it |
+| credential `Mnemora Pipe` (type `httpHeaderAuth`) | header `X-Mnemora-Pipe-Token` | the `Collect` node authenticates to `persist-010` when it posts each record; the pipe answers `403` without it |
 | published + active | yes | the six-hour schedule only fires from a published version |
 | run lease | held by `persist-010` | a second concurrent run is refused instead of crawling twice |
 
@@ -34,7 +34,11 @@ settings it does read from the environment are in `.env.example` beside this fil
 
 ## Nodes
 
-`Manual Run` / `Every Hour` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Pipe Batches` → `Save to Pipe` → `Record Run` → `Release Run Lock`
+`Manual Run` / `Every Hour` → `Build Plan` → `Read State` → `Acquire Run Lock` → `Collect` → `Record Run` → `Release Run Lock`
+
+`Collect` also feeds `To JSON File` → `Write Public Cache`, the derived export. There is no separate
+posting node any more: `Collect` posts each repository's record the moment that repository finishes
+(see below).
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`Collect` → `To JSON File` → `Write Public Cache`
 
 `Build Plan` reads configuration; `Collect` does the work in one pass. They are separate
@@ -49,17 +53,10 @@ version read `$('Node').first()` in several places, which silently processed onl
 first repository and still reported `success`. A single pass over the discovered list
 cannot drop an entry without also failing.
 
-`Pipe Batches` splits database records from the export, passing skipped and failed records to
-the pipeline only — they must reach the database without overwriting a good cache file.
-
 `Acquire Run Lock` claims a lease in the product database before a single GitHub call, so a
 scheduled tick landing on a manual run fails in seconds instead of crawling everything twice. The
 lease is atomic (`INSERT ... ON CONFLICT DO UPDATE ... WHERE expired`), released when fetching
 finishes, and expires on its own if a run dies. `COLLECT_010_RUN_LOCK=false` bypasses it.
-
-`Save to Pipe` posts each record to `http://n8n:5678/webhook/mnemora-commits` (compose network,
-not the host's 5680). If it fails after retries the run fails: collected data that was never
-stored must not look like success.
 
 ## Re-runs are cheap — two collection modes
 
@@ -277,4 +274,13 @@ To verify the header is really sent, put a deliberately invalid token in `.env` 
 GitHub must answer `401 Bad credentials`. A successful run with an invalid token means
 the header is being dropped and the run is silently anonymous.
 
+## Posting per repository, not per run
+
+`Collect` posts each record to the pipe as soon as that repository is done, with three attempts two
+seconds apart. The reason is the task timeout: a node that is killed at page 40 of 50 loses
+everything still sitting in its return value — including the cursors of repositories already fetched.
+Posting inside the loop bounds that loss to the repository in flight.
+
+Observed, not assumed: with three repositories forced to re-fetch, their `refreshed_at_utc` advanced
+at 01:07:14, 01:07:34 and 01:07:46 **while the run was still executing**.
 
