@@ -194,6 +194,40 @@ curl -s -H "X-Mnemora-Token: $TOKEN" http://127.0.0.1:5680/webhook/mnemora-telem
 What to look at first when something is wrong: `health.last_run_age_seconds` (is it running at all?),
 `health.not_complete` (is anything stuck?), then `recent_issues` for the verbatim error.
 
+## A crawl that can be resumed
+
+`MAX_COMMIT_PAGES` used to be a wall, not a budget: a repository needing more pages than the cap
+stopped there, was marked `partial`, and the next run started at page 1 and stopped at the same
+page. It re-read the same pages every hour and never reached the oldest commit — the unit of
+progress was the entire repository, all or nothing.
+
+A crawl is now a named thing that can span runs:
+
+| column | meaning |
+|---|---|
+| `mnemora_repositories.commit_crawl_id` | the open crawl; null when it finished |
+| `commit_page_cursor` | last page fetched; the next run starts at cursor + 1 |
+| `mnemora_commits.last_seen_crawl_id` | which crawl last confirmed each commit |
+
+The cap became a **per-run** budget, so page 51 is reachable on a later run even though the budget
+is 50. Completion is decided by a short page (fewer than 100 commits), which means "reached the
+oldest commit". Only then does the database prune: every row whose `last_seen_crawl_id` is not this
+crawl is deleted, while rows confirmed by earlier runs of the same crawl survive. That replaces
+"send the whole history in one payload" as the condition for pruning, which also removes the memory
+ceiling that came with it.
+
+Verified end to end on `Operator-Syn/operator-synaciel` (2,889 commits, 29 pages) with the budget
+temporarily cut to 10:
+
+| run | cursor after | rows stamped | state | pruned |
+|---|---|---|---|---|
+| 1654 | 10 | 1,000 | partial | 0 |
+| 1682 | 20 | 2,000 | partial | 0 |
+| 1710 | cleared | — | complete | 0 |
+
+`commit_count` came out at exactly 2,889, the same as `count(*)` for that repository, and a planted
+commit that no longer existed upstream was deleted on the next completed crawl (`commits_pruned=1`).
+
 ## Recording failures, not just successes
 
 A run that fails used to leave **nothing** in `mnemora_runs`: n8n does not retain successful
