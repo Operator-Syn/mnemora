@@ -6,7 +6,7 @@
         [
           {
             "index": 0,
-            "node": "Collect",
+            "node": "Lease Available?",
             "type": "main"
           }
         ]
@@ -93,6 +93,24 @@
           }
         ]
       ]
+    },
+    "Lease Available?": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Collect",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "index": 0,
+            "node": "Record Run",
+            "type": "main"
+          }
+        ]
+      ]
     }
   },
   "id": "Nj4F0WC8e2SMHvfh",
@@ -174,7 +192,7 @@
         "jsCode": "@file:code/collect.js"
       },
       "position": [
-        760,
+        820,
         0
       ],
       "type": "n8n-nodes-base.code",
@@ -241,7 +259,7 @@
     {
       "id": "b2a0c1a0-0009-4000-8000-000000000009",
       "name": "Acquire Run Lock",
-      "notes": "Asks persist for the single-run lease before any GitHub call. If another run holds it, this fails immediately with the holder's id and expiry instead of duplicating a 24-repository crawl. TTL bounds a crashed run. Set COLLECT_010_RUN_LOCK=false to bypass deliberately.",
+      "notes": "Asks persist for the single-run lease before any GitHub call. If another run holds it, this returns run_lock='held' with the holder and expiry instead of throwing: a refusal is correct behaviour, so the tick is recorded as 'busy', not as a failed run. TTL bounds a crashed run. Set COLLECT_010_RUN_LOCK=false to bypass deliberately.",
       "parameters": {
         "jsCode": "@file:code/acquire-run-lock.js"
       },
@@ -279,6 +297,41 @@
       ],
       "type": "n8n-nodes-base.code",
       "typeVersion": 2
+    },
+    {
+      "id": "b2a0c1a0-0012-4000-8000-000000000012",
+      "name": "Lease Available?",
+      "notes": "Routes on the lease, not on success/failure. run_lock is 'acquired' when this run owns the lease, 'disabled' when COLLECT_010_RUN_LOCK=false, and 'held' when another run is crawling. Only 'held' skips the crawl \u2014 treating any non-'acquired' value as a refusal would silently stop collecting whenever the lock is turned off.",
+      "notesInFlow": true,
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "lease-held",
+              "leftValue": "={{ $json.run_lock }}",
+              "operator": {
+                "operation": "notEquals",
+                "type": "string"
+              },
+              "rightValue": "held"
+            }
+          ],
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          }
+        },
+        "options": {}
+      },
+      "position": [
+        700,
+        0
+      ],
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4
     }
   ],
   "pinData": {},
