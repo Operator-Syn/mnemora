@@ -18,7 +18,7 @@ else repos = [];
 
 // A run-claim request asks for the single-run lease rather than carrying repository records.
 // It is passed through as-is (base64) and handled by its own branch.
-if (body && body.run_claim && typeof body.run_claim === 'object') {
+if (body?.run_claim && typeof body.run_claim === 'object') {
   const c = body.run_claim;
   if (!['acquire', 'release'].includes(String(c.action))) {
     throw new Error('persist: run_claim.action must be acquire or release');
@@ -32,7 +32,7 @@ if (body && body.run_claim && typeof body.run_claim === 'object') {
 
 // A run summary is the last thing a run sends: what it looked at and what the pipe reported
 // back. Handled by its own branch, because it writes a different table.
-if (body && body.run_summary && typeof body.run_summary === 'object') {
+if (body?.run_summary && typeof body.run_summary === 'object') {
   if (!body.run_summary.run_id) throw new Error('persist: run_summary.run_id is required');
   return [{ json: {
     is_run_summary: true,
