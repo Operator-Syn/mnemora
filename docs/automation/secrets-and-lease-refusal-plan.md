@@ -47,7 +47,7 @@ Not worth it. Revisit if a second consumer of these secrets appears.
 | Verdict | **fix now** | **rotate, document the residual, optionally HMAC later** |
 
 Verified: stored execution 1829 (`execution_data.data`) contains the literal
-`Authorization: Bearer ghp_…`; stored execution 1566 contains `x-mnemora-pipe-token: …` in its
+the resolved bearer header (deliberately redacted here); stored execution 1566 contains `x-mnemora-pipe-token: …` in its
 Webhook output. Neither came from `$env` being wrong — both came from the value crossing into node data.
 
 ---
