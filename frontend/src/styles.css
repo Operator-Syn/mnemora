@@ -220,7 +220,7 @@ a {
 /* Hero ---------------------------------------------------------------------- */
 
 .poster {
-  padding: 44px 0 30px;
+  padding: 58px 0 34px;
   position: relative;
 }
 
@@ -228,11 +228,11 @@ a {
    highlight boxes that carry their own padding. */
 .poster h1 {
   font-family: var(--font-display);
-  font-size: clamp(40px, 7.4vw, 104px);
-  line-height: 1.04;
+  font-size: clamp(38px, 6.6vw, 92px);
+  line-height: 1.1;
   letter-spacing: -0.015em;
   text-transform: uppercase;
-  margin: 0 0 22px;
+  margin: 0 0 26px;
   overflow-wrap: break-word;
   text-wrap: balance;
 }
@@ -247,8 +247,8 @@ a {
 }
 
 .poster h1 .hl.alt {
-  background: var(--sun);
-  color: var(--on-accent);
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .lede {
