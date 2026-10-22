@@ -8,15 +8,13 @@ const summaryItem = $('Collect').all().map((i) => i.json).find((j) => j.cache_fi
 const rows = Array.isArray(summaryItem.repositories) ? summaryItem.repositories : [];
 const mode = (m) => rows.filter((r) => r.collection === m).length;
 
-let commitsSeen = 0, commitsNew = 0, commitsPruned = 0;
-for (const item of $('Save to Pipe').all()) {
-  const j = (item?.json) || {};
-  // Only repository responses carry these; the archive batch answers with its own shape.
-  if (typeof j.commits_seen !== 'number') continue;
-  commitsSeen += Number(j.commits_seen) || 0;
-  commitsNew += Number(j.commits_new) || 0;
-  commitsPruned += Number(j.commits_pruned) || 0;
-}
+// Collect now posts each record as its repository finishes, so the answers live in its own memory
+// rather than in a downstream HTTP node's output. It sums them into pipe_totals for exactly this
+// purpose: still authoritative, still not an estimate.
+const totals = summaryItem.pipe_totals || {};
+const commitsSeen = Number(totals.commits_seen) || 0;
+const commitsNew = Number(totals.commits_new) || 0;
+const commitsPruned = Number(totals.commits_pruned) || 0;
 
 const failed = rows.filter((r) => r.source_state === 'error' || r.source_state === 'stale').length;
 const lock = $('Acquire Run Lock').first().json || {};
