@@ -22,7 +22,7 @@ try {
     json: true,
     timeout: 15000,
   });
-  return [{ json: { ...upstream, run_lock_released: !!(res && res.released) } }];
+  return [{ json: { ...upstream, run_lock_released: !!(res?.released) } }];
 } catch (e) {
   return [{ json: { ...upstream, run_lock_released: false, reason: e.message } }];
 }
