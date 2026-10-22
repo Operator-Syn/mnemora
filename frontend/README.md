@@ -20,6 +20,23 @@ npm install
 npm run dev                        # http://localhost:3000
 ```
 
+`npm run dev` is **already the local Worker runtime**. `@cloudflare/vite-plugin` boots a miniflare
+instance (workerd) and runs the SSR environment inside it — `viteEnvironment: { name: 'ssr' }` in
+`vite.config.ts` is what routes it there — so `process.env` comes from `.dev.vars`, `caches` exists,
+and the server code runs under the same runtime rules as production. Verified in this repo by
+rendering `navigator.userAgent` server-side: it prints `Cloudflare-Workers`, and `MNEMORA_*` env keys
+are visible to the handler.
+
+If you want the *built* bundle under `wrangler dev` instead — no HMR, closer to a deploy:
+
+```sh
+npm run dev:worker                 # build, then wrangler dev -c dist/server/wrangler.json
+```
+
+Both read `.dev.vars` for secrets. Neither puts the key in the browser bundle, because both execute
+the server functions in the Worker.
+
+
 The n8n stack must be running (`cd .. && docker compose up -d`) and the read API must answer:
 
 ```sh
