@@ -27,6 +27,9 @@ const rateReserve = Number(env('COLLECT_010_RATE_RESERVE', 25));
 // minutes here, more on an account with more history, and any interruption leaves no record of
 // what is still outstanding.
 const maxNewPerRun = Number(env('COLLECT_010_MAX_NEW_PER_RUN', 12));
+// Ceiling on commit pages for the whole run, not per repository: it bounds how long one execution
+// can take, so a timeout cannot swallow a long crawl. Leftovers resume from their cursors.
+const maxPagesPerRun = Number(env('COLLECT_010_MAX_PAGES_PER_RUN', 50));
 const token = env('COLLECT_010_GITHUB_TOKEN', '');
 
 const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'mnemora-collector' };
@@ -51,6 +54,7 @@ return [
       headers,
       includeForks: flag('COLLECT_010_INCLUDE_FORKS', true),
       includeArchived: flag('COLLECT_010_INCLUDE_ARCHIVED', true),
+      maxPagesPerRun,
     },
   },
 ];
