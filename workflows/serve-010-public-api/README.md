@@ -23,8 +23,12 @@ answers "not registered". Verified against 2.44.5. Query strings also collapse t
 commit list into the same route as the global feed, since they differ by one predicate.
 
 Response envelope: `{ "count"|"repository"|"commits"… , … }` on success, `{ "error", "route",
-"reason" }` on 404. Errors carry the route that produced them, because a dashboard that calls five
-endpoints should not have to guess which one failed.
+"reason" }` on 404/400. Errors carry the route that produced them, because a dashboard that calls
+four endpoints should not have to guess which one failed.
+
+A scoped commit feed (`?repository_id=`) answering `404` means the repository is unknown, not that it
+has no commits — "no commits" is `200` with `returned: 0`. A bare name like `arqen` matches nothing;
+`full_name` is `owner/name`.
 
 **Paging is a cursor, not an offset.** A page returns `next_before_ms` — epoch milliseconds, send it
 back as `?before_ms=`. A commit landing between two requests therefore cannot duplicate or skip a
