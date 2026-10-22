@@ -52,7 +52,10 @@ case "${1:-}" in
     refs_rc=$?
     ./scripts/check-workflow-layout.py
     layout_rc=$?
-    [ "$env_rc" -eq 0 ] && [ "$refs_rc" -eq 0 ] && [ "$layout_rc" -eq 0 ]
+    # biome, on the Code-node bodies as n8n actually runs them (wrapped, so top-level return parses)
+    ./scripts/check-js-lint.py
+    js_rc=$?
+    [ "$env_rc" -eq 0 ] && [ "$refs_rc" -eq 0 ] && [ "$layout_rc" -eq 0 ] && [ "$js_rc" -eq 0 ]
     exit $?
     ;;
 
@@ -69,6 +72,10 @@ case "${1:-}" in
     }
     ./scripts/check-workflow-layout.py || {
       echo "refusing to import: fix the workflow layout above" >&2
+      exit 1
+    }
+    ./scripts/check-js-lint.py || {
+      echo "refusing to import: biome reported problems above" >&2
       exit 1
     }
     found=0
