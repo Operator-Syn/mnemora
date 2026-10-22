@@ -3,8 +3,11 @@
 The only writer to the product database. It receives observations over HTTP and turns them into
 rows: repositories, commits, runs, telemetry.
 
-It reads **no environment variables** — and therefore has no `.env.example`. Its database
-connection is an n8n **credential**, not configuration (see *Prerequisites*). That is deliberate:
+It reads **one environment variable** — `MNEMORA_PIPE_TOKEN`, the secret it verifies request
+signatures with — and therefore still has no `.env.example`: that value is the stack's, required by
+`compose.yaml` and injected into both `n8n` and `worker`, not per-workflow configuration. A second
+copy in this directory would be a second thing to rotate. Its database connection is an n8n
+**credential**, not configuration (see *Prerequisites*). That is deliberate:
 `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` in this stack means every workflow can read every env var, so a
 password in `.env` would be readable by all three workflows, while a credential is readable only by
 the nodes that declare it.
@@ -13,7 +16,7 @@ the nodes that declare it.
 
 | what | value | why |
 |---|---|---|
-| credential `Mnemora Pipe` (type `httpHeaderAuth`) | header `X-Mnemora-Pipe-Token`, value in `.env` as `MNEMORA_PIPE_TOKEN` | the webhook requires it; without the header n8n answers `403` before any workflow runs |
+| shared secret `MNEMORA_PIPE_TOKEN` | stack `.env`; identical in `n8n` and `worker` | `Verify Signature` verifies every request against it. Not a bearer token — nothing sends it. |
 | credential `Mnemora DB` (type `postgres`) | host `postgres`, port 5432, database `mnemora`, user `mnemora_app` | the write role. Owns the tables; cannot connect to `n8n`'s database. |
 | published | yes | an unpublished webhook answers `404` and every collector run fails loudly |
 
@@ -39,15 +42,40 @@ POST /webhook/mnemora-commits
 Inside the compose network: `http://n8n:5678/webhook/mnemora-commits`. Not `127.0.0.1:5680` — inside
 a container that address is the container itself.
 
-**Authenticated.** Every call must carry `X-Mnemora-Pipe-Token`; without it n8n answers `403` before
-the workflow executes. Layer on top: the whole stack publishes only on `127.0.0.1`, and the write
-role cannot reach `n8n`'s database. Two callers exist and both send the header:
+**Signed.** Every call must carry `X-Mnemora-Timestamp` and `X-Mnemora-Signature`:
+`HMAC-SHA256(MNEMORA_PIPE_TOKEN, "<unix-ts>.<action>.<identity>")`, hex, accepted within 60 seconds
+of the timestamp. A missing or stale signature gets `401` with a `reason` in the body — n8n's built-in
+header auth would answer `403` before the workflow ran, but it accepted one long-lived token, and this
+workflow stores request headers in its execution data. A signature stored there is not a credential.
 
-- `collect-010` — uses the `Mnemora Pipe` credential on its HTTP node, so the token never enters an
-  environment variable where other workflows could read it.
+The signed triple is derived from the payload's shape, identically on both sides:
+
+| payload | action | identity |
+|---|---|---|
+| `{ run_claim: { action: "acquire" \| "release", run_id } }` | that action | the `run_id` |
+| `{ run_summary: { run_id, ... } }` | `summary` | the `run_id` |
+| one repository record | `records` | `record` |
+| `{ repositories: [ ... ] }` | `records` | `batch` |
+| `{ archived_repository_ids: [...] }` | `archive` | `batch` |
+
+It binds *who and what kind*, not the bytes: the threat is a captured request being reused as a key,
+not a tampered payload on a loopback network. Layer on top: the whole stack publishes only on
+`127.0.0.1`, and the write role cannot reach `n8n`'s database. Three callers exist and all sign:
+
+- `collect-010` — signs each record, the archive list, the lease acquire/release and the run summary
+  in its Code nodes (a Code node cannot hold an n8n credential).
 - `scripts/backfill.sh` — reads `MNEMORA_PIPE_TOKEN` from `.env` (mode 0600, gitignored).
+- the `notify-010` error workflow talks to Postgres directly, not to this endpoint.
 
-Any manual `curl` now needs the header too: `-H "X-Mnemora-Pipe-Token: $MNEMORA_PIPE_TOKEN"`.
+The `Mnemora Pipe` (`httpHeaderAuth`) credential is no longer used by anything and can be deleted.
+
+A manual `curl` needs both headers:
+
+```sh
+sign() { printf '%s' "$1" | openssl dgst -sha256 -hmac "$MNEMORA_PIPE_TOKEN" | sed 's/^.*= //'; }
+ts=$(date +%s)
+# -H "X-Mnemora-Timestamp: $ts" -H "X-Mnemora-Signature: $(sign "$ts.records.batch")"
+```
 
 ## Four payload shapes, four branches
 
@@ -78,29 +106,40 @@ and commit messages contain them.
 ## Nodes
 
 ```
-Commits In (Webhook) → Validate Payload → Is Run Claim? ─┬─ yes → Run Claim  → Reply
-                                                          └─ no  → Is Run Summary? ─┬─ yes → Save Run → Reply
-                                                                                    └─ no  → Save Batch → Reply
+Commits In (Webhook) → Verify Signature → Signature Valid? ─┬─ no  → Reject Unauthenticated (401)
+                                                            └─ yes → Validate Payload
+                                                                       → Is Run Claim? ─┬─ yes → Run Claim → Reply
+                                                                                        └─ no  → Is Run Summary? ─┬─ yes → Save Run → Reply
+                                                                                                                   └─ no  → Save Batch → Reply
 ```
 
-`Validate Payload` enforces shape before any SQL runs. `Reply` returns the counts so the caller can
-verify what happened rather than assume: `repositories`, `repositories_archived`, `commits_pruned`,
-`commits_seen`, `commits_new`.
+`Verify Signature` runs before anything is parsed or written, derives the signed action/identity from
+the payload's shape, and drops the request headers from its output. `Validate Payload` then enforces
+shape before any SQL runs. `Reply` returns the counts so the caller can verify what happened rather
+than assume: `repositories`, `repositories_archived`, `commits_pruned`, `commits_seen`, `commits_new`.
 
 ## Testing without n8n
 
 ```sh
-# a repository record
-curl -s -X POST http://127.0.0.1:5680/webhook/mnemora-commits \
-  -H "X-Mnemora-Pipe-Token: $MNEMORA_PIPE_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"repositories":[{"repository_id":1,"full_name":"test/x","source_state":"complete","commits":[]}]}'
+sign() { printf '%s' "$1" | openssl dgst -sha256 -hmac "$MNEMORA_PIPE_TOKEN" | sed 's/^.*= //'; }
 
-# the lease
+# a repository record (identity `record`)
+ts=$(date +%s)
 curl -s -X POST http://127.0.0.1:5680/webhook/mnemora-commits \
-  -H "X-Mnemora-Pipe-Token: $MNEMORA_PIPE_TOKEN" \
+  -H "X-Mnemora-Timestamp: $ts" -H "X-Mnemora-Signature: $(sign "$ts.records.record")" \
+  -H 'Content-Type: application/json' \
+  -d '{"repository_id":1,"full_name":"test/x","source_state":"complete","commits":[]}'
+
+# the lease (identity is the run_id)
+ts=$(date +%s)
+curl -s -X POST http://127.0.0.1:5680/webhook/mnemora-commits \
+  -H "X-Mnemora-Timestamp: $ts" -H "X-Mnemora-Signature: $(sign "$ts.acquire.probe")" \
   -H 'Content-Type: application/json' \
   -d '{"run_claim":{"action":"acquire","run_id":"probe","ttl_seconds":60}}'
+
+# no signature at all must be 401, not 500
+curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:5680/webhook/mnemora-commits \
+  -H 'Content-Type: application/json' -d '{"run_claim":{"action":"acquire","run_id":"probe"}}'
 ```
 
 ## Related
