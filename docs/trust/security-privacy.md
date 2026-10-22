@@ -43,7 +43,7 @@ instance on 2026-10-21, not inferred from configuration files.
 
 | surface | gate | verified |
 |---|---|---|
-| `POST /webhook/mnemora-commits` (write pipe) | `X-Mnemora-Pipe-Token` header → n8n credential `Mnemora Pipe`, answered by `403` before the workflow runs | anonymous `403`, wrong token `403`, correct token reaches the workflow |
+| `POST /webhook/mnemora-commits` (write pipe) | HMAC-SHA256 signature over `<ts>.<action>.<identity>` with `MNEMORA_PIPE_TOKEN`, verified in `Verify Signature` before any SQL, 60-second window | unsigned `401`, wrong signature `401`, stale timestamp `401`, correct signature reaches the workflow |
 | `GET /webhook/mnemora-telemetry` (read endpoint) | same shape: `X-Mnemora-Token` → credential `Mnemora Telemetry` | anonymous `403`, wrong header name `403`, correct token `200` |
 | `notify-010-run-failures` | writes `mnemora_runs` directly with the `Mnemora DB` postgres credential, bypassing the pipe by design — it only ever inserts rows with `status = 'error'` | inserts nothing but run metadata; no commit or repository rows |
 | the database behind both | role-scoped: `mnemora_reader` can `SELECT` three tables, cannot write, cannot connect to the `n8n` database; the pipe's role cannot reach `n8n` either | `has_table_privilege` → select `t`, insert `f`, update `f`; `has_database_privilege(... 'n8n', 'CONNECT')` → `f` |
@@ -56,11 +56,13 @@ instance on 2026-10-21, not inferred from configuration files.
 
 ### Two asymmetries worth stating
 
-1. **The three Code nodes that call the pipe read the token from the environment.** A Code node
+1. **The Code nodes that call the pipe read the signing secret from the environment.** A Code node
    cannot hold an n8n credential, so `MNEMORA_PIPE_TOKEN` is in the container environment. With
-   `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, every workflow can read it. The HTTP nodes use the
-   credential instead, which is tighter. Closing this fully means converting those three calls into
-   HTTP Request nodes — more nodes, and worth it only if the stack stops being single-operator.
+   `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, every workflow can read it. What changed is what is
+   *transmitted and stored*: the pipe now takes an HMAC signature, so the secret never leaves the
+   container and a retained request is not a credential. The `$env` trust boundary is unchanged, and
+   closing it fully means moving these calls into HTTP Request nodes, which have no loop or
+   pagination — worth it only if the stack stops being single-operator.
 2. **MFA is off on the editor account.** Loopback binding is the current mitigation. Turning MFA on
    requires the operator's authenticator, so it stays a recommendation rather than something the
    repository can do.
