@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>World B — Night Signal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --void:#0A0A0A; --panel:#141414; --line:#2A2A2A;
+    --lime:#C8FF00; --cyan:#00E0FF; --magenta:#FF2E88; --white:#F5F5F5;
+    --rule:2px solid var(--white); --shadow:6px 6px 0 var(--lime);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--void);color:var(--white);font-family:"Space Mono",monospace;}
+  .wrap{max-width:1160px;margin:0 auto;padding:0 20px}
+  header{border-bottom:2px solid var(--lime);background:var(--void);position:sticky;top:0;z-index:5}
+  .bar{display:flex;align-items:center;gap:14px;padding:14px 0}
+  .mark{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:22px;letter-spacing:-.02em;text-transform:lowercase;
+        background:var(--lime);color:var(--void);padding:5px 12px;box-shadow:4px 4px 0 var(--magenta)}
+  .status{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+  .dot{width:8px;height:8px;background:var(--lime);box-shadow:0 0 0 0 rgba(200,255,0,.7);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(200,255,0,.55)}70%{box-shadow:0 0 0 9px rgba(200,255,0,0)}100%{box-shadow:0 0 0 0 rgba(200,255,0,0)}}
+  nav{display:flex;gap:16px;font-size:11px;text-transform:uppercase;letter-spacing:.1em}
+  nav a{color:var(--white);text-decoration:none;opacity:.75}
+  nav a:hover{opacity:1;color:var(--lime)}
+  .ticker{border-bottom:2px solid var(--line);overflow:hidden;background:var(--panel)}
+  .ticker-track{display:flex;gap:28px;padding:8px 0;white-space:nowrap;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--lime)}
+  .ticker-track span{color:var(--white);opacity:.8}
+  h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:clamp(44px,7.4vw,104px);line-height:.86;
+     letter-spacing:-.045em;margin:44px 0 16px;text-transform:none}
+  h1 .n{color:var(--lime)} h1 .c{color:var(--cyan)}
+  .deck{max-width:56ch;font-size:13px;line-height:1.7;color:#B9B9B9;margin:0 0 26px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 34px}
+  .stat{border:2px solid var(--line);background:var(--panel);padding:12px}
+  .stat b{display:block;font-family:"Bricolage Grotesque",sans-serif;font-size:28px;letter-spacing:-.02em;color:var(--white)}
+  .stat span{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#8C8C8C}
+  .stat:nth-child(1) b{color:var(--lime)} .stat:nth-child(2) b{color:var(--cyan)}
+  .stat:nth-child(3) b{color:var(--magenta)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{border:2px solid var(--white);background:var(--panel);padding:16px;position:relative;transition:transform .12s ease, box-shadow .12s ease}
+  .card:hover{transform:translate(-2px,-2px);box-shadow:var(--shadow)}
+  .card h3{font-family:"Bricolage Grotesque",sans-serif;font-size:17px;margin:0 0 6px;font-weight:700;letter-spacing:-.01em}
+  .card h3 a{color:var(--white);text-decoration:none;border-bottom:2px solid var(--cyan)}
+  .card h3 a:hover{color:var(--cyan)}
+  .card p{margin:0 0 12px;font-size:11.5px;line-height:1.6;color:#9E9E9E;max-width:44ch}
+  .meta{display:flex;justify-content:space-between;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:#7A7A7A}
+  .meta b{color:var(--lime);font-size:12px}
+  .meter{display:block;height:4px;background:var(--line);margin:10px 0 0}
+  .meter i{display:block;height:4px;background:var(--cyan)}
+  footer{margin-top:44px;border-top:2px solid var(--magenta);padding:20px 0}
+  footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:#8C8C8C}
+  footer a{color:var(--magenta);text-decoration:none}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}nav{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <div class="mark">mnemora</div>
+    <nav><a href="#">repositories</a><a href="#">about</a><a href="https://github.com/Operator-Syn">github ↗</a></nav>
+    <div class="status"><span class="dot"></span>feed live</div>
+  </div>
+</header>
+
+<div class="ticker">
+  <div class="wrap ticker-track">
+    <span>C++ 34%</span><span>C 22%</span><span>TypeScript 12%</span><span>JavaScript 7%</span>
+    <span>Python 6%</span><span>Rust 6%</span><span>Java 3%</span><span>Jupyter 3%</span>
+    <span>collected hourly</span><span>postgres → read-only api</span>
+  </div>
+</div>
+
+<main class="wrap">
+  <h1><span class="n">25</span> repos,<br /><span class="c">7,224</span> commits.</h1>
+  <p class="deck">Collected from GitHub by an hourly job, stored in Postgres, served by a read-only API.
+  Every number on this page is a stored row, not an estimate.</p>
+
+  <div class="stats">
+    <div class="stat"><b>25</b><span>public repos</span></div>
+    <div class="stat"><b>7,224</b><span>commits</span></div>
+    <div class="stat"><b>12 min</b><span>since refresh</span></div>
+    <div class="stat"><b>8</b><span>languages</span></div>
+  </div>
+
+  <div class="grid">
+    <article class="card">
+      <h3><a href="#">operator-synaciel</a></h3>
+      <p>The Operator-Syn site portfolio.</p>
+      <div class="meta"><span>pushed 2026-10-20</span><b>2,889 commits</b></div>
+      <span class="meter"><i style="width:100%"></i></span>
+    </article>
+    <article class="card">
+      <h3><a href="#">PvZ-Portable-Modded</a></h3>
+      <p>Cross-platform reimplementation of Plants vs. Zombies.</p>
+      <div class="meta"><span>pushed 2026-10-03</span><b>1,123 commits</b></div>
+      <span class="meter"><i style="width:39%"></i></span>
+    </article>
+    <article class="card">
+      <h3><a href="#">arqen</a></h3>
+      <p>Dockerized Gmail MCP server with automatic OpenBao setup.</p>
+      <div class="meta"><span>pushed 2026-10-18</span><b>1,109 commits</b></div>
+      <span class="meter"><i style="width:38%"></i></span>
+    </article>
+    <article class="card">
+      <h3><a href="#">nixos-workstation</a></h3>
+      <p>Declarative NixOS configuration for one machine.</p>
+      <div class="meta"><span>pushed 2026-10-19</span><b>696 commits</b></div>
+      <span class="meter"><i style="width:24%"></i></span>
+    </article>
+    <article class="card">
+      <h3><a href="#">peer-tutoring-platform</a></h3>
+      <p>Tutors and tutees, with scheduling and verification.</p>
+      <div class="meta"><span>pushed 2026-03-14</span><b>402 commits</b></div>
+      <span class="meter"><i style="width:14%"></i></span>
+    </article>
+    <article class="card">
+      <h3><a href="#">mnemora</a></h3>
+      <p>The collector, store and API this page is reading.</p>
+      <div class="meta"><span>pushed 1 h ago</span><b>231 commits</b></div>
+      <span class="meter"><i style="width:8%"></i></span>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap"><span>© 2026 mnemora</span><a href="https://github.com/Operator-Syn/mnemora">how this page is built ↗</a></div>
+</footer>
+</body>
+</html>
