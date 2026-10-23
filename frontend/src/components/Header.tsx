@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import MotionToggle from './MotionToggle'
 import ThemeToggle from './ThemeToggle'
 
 export default function Header() {
@@ -24,6 +25,7 @@ export default function Header() {
         </nav>
 
         <ThemeToggle />
+        <MotionToggle />
       </div>
     </header>
   )
