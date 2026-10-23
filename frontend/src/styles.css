@@ -86,6 +86,16 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* A footer sits at the bottom of the viewport, not at the bottom of whatever it happens to
+     follow. On a short page — a 404, an empty index — the flow height was less than the window,
+     so the footer floated up under the content with a band of ground beneath it. */
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1 0 auto;
 }
 
 a {
@@ -414,9 +424,6 @@ a {
      regardless of how long the name or the description runs. */
   display: flex;
   flex-direction: column;
-  transition:
-    box-shadow 120ms ease,
-    transform 120ms ease;
 }
 
 .card:hover {
@@ -573,7 +580,6 @@ a {
 }
 
 
-
 .status-row {
   display: flex;
   align-items: center;
@@ -601,11 +607,11 @@ a {
   background: var(--tomato);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .pulse .dot {
+html[data-motion='on'] .pulse .dot {
     animation: pulse-dot 2.4s ease-out infinite;
   }
-}
+
+
 
 .status-sep {
   width: 20px;
@@ -690,10 +696,6 @@ a {
   border: var(--rule-2);
   padding: 5px 9px;
   cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease,
-    transform 120ms ease;
 }
 
 .chip b {
@@ -726,7 +728,6 @@ a {
   background: color-mix(in srgb, var(--ink) 10%, var(--paper));
   overflow: hidden;
   opacity: 0.6;
-  transition: opacity 140ms ease;
 }
 
 .card:hover .card-bar,
@@ -744,14 +745,14 @@ a {
   border-right: 0;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  /* `backwards`, not `both`: a forwards-filling animation keeps applying its final transform, and
+/* `backwards`, not `both`: a forwards-filling animation keeps applying its final transform, and
      an active animation outranks a transition on the same property — which silently killed the
      card's hover lift for the life of the page. */
-  .rise {
+html[data-motion='on'] .rise {
     animation: rise-in 460ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards;
   }
-}
+
+
 
 @keyframes rise-in {
   from {
@@ -764,12 +765,12 @@ a {
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .stack-live i {
+html[data-motion='on'] .stack-live i {
     transform-origin: left;
     animation: grow 520ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards;
   }
-}
+
+
 
 @keyframes grow {
   from {
@@ -815,7 +816,6 @@ a {
   opacity: 0.4;
 }
 
-
 /* Press run ------------------------------------------------------------------
    The world is printed, so the motion is printing: the stamp presses in, the
    highlight blocks register left to right like ink laid on a sheet, section
@@ -824,38 +824,33 @@ a {
    Every block below is gated on a motion preference.
    --------------------------------------------------------------------------- */
 
-@media (prefers-reduced-motion: no-preference) {
-  .stamp {
+html[data-motion='on'] .stamp {
     animation: stamp-press 540ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-
-  .poster h1 .hl {
+html[data-motion='on'] .poster h1 .hl {
     animation: ink-register 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
-
-  html.motion-ready [data-reveal] {
+html[data-motion='on'].motion-ready [data-reveal] {
     opacity: 0;
     transform: translateY(14px);
     transition:
       opacity 420ms cubic-bezier(0.16, 1, 0.3, 1),
       transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-
-  html.motion-ready [data-reveal][data-in] {
+html[data-motion='on'].motion-ready [data-reveal][data-in] {
     opacity: 1;
     transform: none;
   }
-
-  html.motion-ready .brow::after {
+html[data-motion='on'].motion-ready .brow::after {
     transform: scaleX(0);
     transform-origin: left;
     transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1) 100ms;
   }
-
-  html.motion-ready .brow[data-in]::after {
+html[data-motion='on'].motion-ready .brow[data-in]::after {
     transform: scaleX(1);
   }
-}
+
+
 
 @keyframes stamp-press {
   from {
@@ -897,7 +892,6 @@ a {
   background: var(--ink);
   transform-origin: left;
   transform: scaleX(var(--progress, 0));
-  transition: transform 900ms linear;
 }
 
 .cycle-label {
@@ -1130,56 +1124,49 @@ a {
   color: var(--paper);
 }
 
-
 /* Interaction cadence -------------------------------------------------------
    The page is a running collector, not a screenshot: the status dot pulses, the
    gauge fills, the refreshed stamp ticks, and the ledger answers the pointer.
-   Every movement below reports something true. All of it is gated on
-   prefers-reduced-motion: no-preference.
+   Every movement below reports something true, and all of it is gated on
+   html[data-motion='on'] — a resolved value that starts from the OS preference and can be
+   overridden by the Motion control in the masthead.
    --------------------------------------------------------------------------- */
 
-@media (prefers-reduced-motion: no-preference) {
-  .card h3 a::after {
+html[data-motion='on'] .card h3 a::after {
     transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-
-  /* The rule redraws under the name on hover and on keyboard focus. */
-  .card:hover h3 a::after,
-  .card:focus-within h3 a::after {
+/* The rule redraws under the name on hover and on keyboard focus. */
+html[data-motion='on'] .card:hover h3 a::after,
+html[data-motion='on'] .card:focus-within h3 a::after {
     animation: rule-draw 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-
-  .card-tag {
+html[data-motion='on'] .card-tag {
     transition:
       background 140ms ease,
       color 140ms ease,
       transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-
-  .card:hover .card-tag,
-  .card:focus-within .card-tag {
+html[data-motion='on'] .card:hover .card-tag,
+html[data-motion='on'] .card:focus-within .card-tag {
     background: var(--sun);
     color: var(--on-accent);
     transform: rotate(-4deg) translateY(-1px);
   }
-
-  .legend span {
+html[data-motion='on'] .legend span {
     transition: opacity 140ms ease;
   }
-
-  /* Hovering a legend row dims every other slice, so the pair reads as one object. */
-  .legend[data-focus] span:not([data-on]) {
+/* Hovering a legend row dims every other slice, so the pair reads as one object. */
+html[data-motion='on'] .legend[data-focus] span:not([data-on]) {
     opacity: 0.4;
   }
-
-  .stack i {
+html[data-motion='on'] .stack i {
     transition: opacity 160ms ease;
   }
-
-  .stack[data-focus] i:not([data-on]) {
+html[data-motion='on'] .stack[data-focus] i:not([data-on]) {
     opacity: 0.25;
   }
-}
+
+
 
 @keyframes rule-draw {
   from {
@@ -1189,6 +1176,7 @@ a {
     transform: scaleX(1);
   }
 }
+
 
 /* Not found ---------------------------------------------------------------- */
 
@@ -1209,13 +1197,72 @@ a {
   border: var(--rule-2);
   box-shadow: 5px 5px 0 var(--sun);
   text-decoration: none;
-  transition:
-    transform 120ms ease,
-    box-shadow 120ms ease;
 }
 
 .cta:hover,
 .cta:focus-visible {
   transform: translate(-2px, -2px);
   box-shadow: 7px 7px 0 var(--sun);
+}
+
+/* Every transition the page owns lives here, behind the same gate as the keyframes: with motion off
+   nothing is merely slowed down, it simply does not transition. */
+html[data-motion='on'] .card {
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+html[data-motion='on'] .chip {
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+html[data-motion='on'] .card-bar {
+  transition: opacity 140ms ease;
+}
+
+html[data-motion='on'] .cycle i {
+  transition: transform 900ms linear;
+}
+
+html[data-motion='on'] .cta {
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/* Route transitions ---------------------------------------------------------
+   The platform API does the work (router: defaultViewTransition); this is only the
+   vocabulary. Pages are printed sheets: the outgoing one lifts away, the incoming
+   one registers down. Nothing here runs when motion is off — the swap is instant.
+   --------------------------------------------------------------------------- */
+
+html[data-motion='on']::view-transition-old(root) {
+  animation: page-lift 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+html[data-motion='on']::view-transition-new(root) {
+  animation: page-register 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[data-motion='off']::view-transition-old(root),
+html[data-motion='off']::view-transition-new(root) {
+  animation: none;
+}
+
+@keyframes page-lift {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes page-register {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
