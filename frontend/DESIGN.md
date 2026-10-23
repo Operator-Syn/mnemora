@@ -305,6 +305,19 @@ rest of the page is quiet by comparison.
   elapsed. It advances every 15s and is a progress bar to assistive tech. This is the page's
   continuous movement, and it is measuring the actual collection cycle.
 - **Live countdown** — `NEXT PASS IN n MIN` decrements locally from the server-rendered value.
+- **Hero count-up** — the repository and commit totals count from zero over 900ms. The figure is laid
+  out at its *final* width from the first frame: the settled text sits in a hidden pseudo-element that
+  reserves the space, and the live digits are absolutely positioned on top. Without that, the number
+  grew by 150px while counting, `commits.` slid sideways and the line rewrapped mid-animation.
+
+**The Counting Figure Rule.** A number that animates must not change its own width. Reserve the
+settled string as hidden pseudo-content (`content: attr(data-final)`), never as a second copy of the
+text — a hidden duplicate is still selectable, copyable and findable, so copying the headline would
+read "7,2247,224". The reservation is layout, not content.
+
+**The Count Belongs to the Switch Rule.** The counter reads `html[data-motion='on']`, not the media
+query, and lands on its final value immediately when motion is off. A visitor who stopped motion does
+not get a page that still counts at them.
 - **Section rules** — brows draw their hairline across on first view (460ms, 100ms delay).
 - **Card entrance** — 10px rise with 45ms stagger, first 12 only, once per load.
 - **The stack** — every segment is at its true width in every frame; the whole bar prints up
