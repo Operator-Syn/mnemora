@@ -348,6 +348,8 @@ a {
 .stack i {
   display: block;
   height: 100%;
+  /* A 0.3% slice is still a slice: give it a legible minimum without inflating its number. */
+  min-width: 3px;
   border-right: var(--rule-2);
 }
 
@@ -765,19 +767,22 @@ html[data-motion='on'] .rise {
   }
 }
 
-html[data-motion='on'] .stack-live i {
-    transform-origin: left;
-    animation: grow 520ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards;
-  }
+/* The stack used to grow segment by segment, left to right, with a 90ms stagger. Any glance during
+   that second read the empty track as unlabelled data — a proportion chart must never be shown
+   partially filled, not even transiently. It now prints as one object: full width in every frame,
+   fading up instead of extending. */
+html[data-motion='on'] .stack-live {
+  animation: stack-print 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
 
 
 
-@keyframes grow {
+@keyframes stack-print {
   from {
-    transform: scaleX(0);
+    opacity: 0.25;
   }
   to {
-    transform: scaleX(1);
+    opacity: 1;
   }
 }
 
