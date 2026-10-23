@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T15:15:00+08:00",
+  "generatedAt": "2026-10-23T16:10:00+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -205,12 +205,12 @@
       },
       {
         "name": "rise-in",
-        "value": "460ms cubic-bezier(0.2,0.9,0.25,1)",
+        "value": "300ms delay + 460ms cubic-bezier(0.2,0.9,0.25,1)",
         "purpose": "Card entrance, staggered 45ms, first 12 only."
       },
       {
         "name": "stack-print",
-        "value": "420ms cubic-bezier(0.16,1,0.3,1)",
+        "value": "300ms delay + 420ms cubic-bezier(0.16,1,0.3,1)",
         "purpose": "The language stack fading up at full width; never drawn partially filled."
       },
       {
@@ -231,7 +231,7 @@
       {
         "name": "page-register",
         "value": "300ms cubic-bezier(0.16,1,0.3,1)",
-        "purpose": "Incoming route, through the platform View Transitions API."
+        "purpose": "Page arrival: the view transition on navigation, and <main> on a refresh. 300ms."
       },
       {
         "name": "page-lift",
@@ -373,6 +373,11 @@
         "name": "The Label Rule",
         "body": "The server cannot know a stored preference, so it must not render one label: every toggle ships all its labels and an html[data-*-mode] attribute decides which is visible.",
         "section": "components"
+      },
+      {
+        "name": "The One Arrival Rule",
+        "body": "A page arrives the same way by navigation or reload: page-register carries the first 300ms on both paths, and every entrance starts on the same beat after it.",
+        "section": "motion"
       }
     ],
     "dos": [
