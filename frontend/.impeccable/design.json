@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T14:35:00+08:00",
+  "generatedAt": "2026-10-23T14:55:00+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -216,7 +216,7 @@
       {
         "name": "count-up",
         "value": "900ms cubic ease-out",
-        "purpose": "Headline figures on first paint; instant under reduced motion."
+        "purpose": "Hero totals counting from zero inside a box sized to the final value."
       },
       {
         "name": "card-hover",
@@ -358,6 +358,11 @@
         "name": "The Closed Proportion Rule",
         "body": "A stacked bar reaches the right edge, always: rounded shares leave a percent unaccounted for, so the remainder is folded into Other before rendering, and tiny slices get a minimum width without inflating their percentage.",
         "section": "data"
+      },
+      {
+        "name": "The Counting Figure Rule",
+        "body": "A figure that animates must not change its own width: the settled string is reserved as hidden pseudo-content, so the digits change inside a fixed box and the line never rewraps.",
+        "section": "typography"
       }
     ],
     "dos": [
