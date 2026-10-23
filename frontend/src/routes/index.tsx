@@ -149,7 +149,10 @@ function useCycleCountdown(initialMinutes: number): { minutesLeft: number; progr
 function useScrollReveal(): void {
   useEffect(() => {
     const root = document.documentElement
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
+    // [data-deal] marks a container whose children should animate as they come into view (the card
+    // grid). Watching the container means the stagger plays when the reader arrives, instead of
+    // burning itself while the grid is still below the fold.
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal], [data-deal]'))
     if (nodes.length === 0) return
 
     if (!('IntersectionObserver' in window)) {
@@ -157,6 +160,8 @@ function useScrollReveal(): void {
       return
     }
 
+    // The inline script already added this when motion is on; adding it again is a no-op, and if
+    // the script was skipped the page must still reveal rather than stay hidden.
     root.classList.add('motion-ready')
     const observer = new IntersectionObserver(
       (entries) => {
@@ -437,7 +442,7 @@ function Home() {
                     {visible.length} of {byCommits.length} shown · most commits first
                   </span>
                 </div>
-                <div className="cards">
+                <div className="cards" data-deal>
                   {visible.map((repo, index) => {
                     const langs = Object.entries(repo.languages_bytes ?? {})
                       .sort((a, b) => b[1] - a[1])
