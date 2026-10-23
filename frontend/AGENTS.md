@@ -58,6 +58,10 @@ Load in this order, and only what the task needs:
 - **Route types come from a generated file.** After adding or renaming a file in `src/routes/`, run
   `npm run generate-routes` or `createFileRoute('/x')` fails with `not assignable to parameter of
   type 'undefined'`.
+- **Rebuilding under `dev:worker` kills it.** `wrangler dev -c dist/server/wrangler.json` serves a
+  snapshot of `dist/`; `npm run build` rewrites that tree, wrangler prints "Reloading local server..."
+  and stops answering, so the tab keeps the last page it rendered. Use `npm run dev:worker`, which
+  stops the old server first. A dead `:8787` is a dead server, not a cache to clear.
 - **Two dev servers, different jobs.** `npm run dev` is Vite + workerd (HMR, ~1s edits). `npm run
   dev:worker` builds and runs the real bundle under `wrangler dev` (production parity, live reload
   only). Both read `.dev.vars`.
@@ -74,7 +78,9 @@ Load in this order, and only what the task needs:
 
 ```sh
 npm run dev            # vite dev in workerd, port 3000
-npm run dev:worker     # build, then wrangler dev -c dist/server/wrangler.json
+npm run dev:fresh      # clean the build/vite caches, then vite dev
+npm run clean          # dist, .wrangler, .tanstack, node_modules/.vite
+npm run dev:worker     # stop any running worker, build, then serve dist on :8787
 npm run build          # vite build (also copies .dev.vars into dist/server)
 npm run generate-routes
 npm run skills:sync    # refresh .agents/skills from node_modules
@@ -91,21 +97,37 @@ biome check frontend/src frontend/scripts
 Generated output is excluded in `biome.json`: `worker-configuration.d.ts`, `routeTree.gen.ts`,
 `dist/`, `.wrangler/`, `.tanstack/`, `node_modules/`.
 
-## Hooks in this workspace
+## Hooks that cover this stack
 
-| hook | file | fires on | state |
+Registration lives at the repository layer; the implementation lives here. See the root
+[`AGENTS.md`](../AGENTS.md#agent-hooks) for the discovery rules behind that split.
+
+| hook | implementation | registration | fires on |
 |---|---|---|---|
-| Intent skill gate (Claude) | `.claude/settings.json` | session start; `Bash\|Write\|Edit\|MultiEdit\|NotebookEdit` | enabled |
-| Intent skill gate (Codex) | `.codex/hooks.json` | session start; `Bash\|apply_patch\|Edit\|Write` | enabled |
-| Intent hooks (Copilot) | — | — | skipped: project scope unsupported, needs `--scope user` |
-| `impeccable` design detector | `.impeccable/config.json` | edits to `.tsx/.jsx/.ts/.js/.css/.html/...` | enabled |
-| Hermes `post_tool_call` → `projects_move_hook.py` | profile `config.yaml` | the `desktop_project` tool | enabled, unrelated to code |
+| Intent gate (Claude) | `.intent/hooks/intent-claude-gate.mjs` | root `.claude/settings.json`; this directory's `.claude/settings.json` for sessions started inside `frontend/` | session start; `Bash\|Write\|Edit\|MultiEdit\|NotebookEdit` |
+| Intent gate (Codex) | `.intent/hooks/intent-codex-gate.mjs` | root `.codex/hooks.json` → `scripts/hooks/intent-dispatch.mjs` | session start; `Bash\|apply_patch\|Edit\|Write` |
+| `impeccable` design detector | — | `.impeccable/config.json` | edits to `.tsx/.jsx/.ts/.js/.css/.html/...` |
 
-The two hook families do not write the same file: Intent owns `.claude/settings.json` and
-`.codex/hooks.json`; Impeccable keeps its state in `.impeccable/` and only rewrites provider
-manifests when its own skill folder is installed. Verified by running `impeccable hooks on` and
-diffing `.codex/hooks.json` — no change. Re-run that diff after any hook install:
-`cp .codex/hooks.json /tmp/a && npx intent hooks install --scope project --agents all && diff /tmp/a .codex/hooks.json`.
+Copilot's Intent hooks are skipped: project scope is unsupported there and would need `--scope user`.
+The Hermes desktop profile additionally runs a `post_tool_call` hook (`projects_move_hook.py`) on the
+`desktop_project` tool; that lives in the profile `config.yaml`, not in this repository.
+
+The dispatcher scopes the gate to this directory: a session started outside `frontend/`, or an edit
+whose target is outside it, gets no catalog and no deny. Sessions rooted in `frontend/` still read
+this directory's `.claude/settings.json` directly, because Claude Code reads the shared project
+settings from the session's primary working directory — that nested file is the only way to cover
+those sessions, and it points at the same implementation.
+
+The two hook families do not write the same file: Intent owns the `.claude`/`.codex` registration,
+Impeccable keeps its state in `.impeccable/`. Verified by running `impeccable hooks on` and diffing
+the registration — no change. Re-run that diff after any hook install:
+
+```sh
+cp ../.codex/hooks.json /tmp/a && npx intent hooks install --scope project --agents all && diff /tmp/a ../.codex/hooks.json
+```
+
+A registration file being present is not evidence that a hook ran. Codex additionally reviews and
+trusts project hooks by hash, so a changed command is skipped until trusted again.
 
 No third hook is installed, and none ships with the TanStack skills (verified: no `hooks.json` in any
 `@tanstack/*/skills` tree). They do not conflict: the design detector reports *visual* findings on
