@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
-import { useInView } from '../lib/reveal'
 
 export const Route = createFileRoute('/about')({
   // Same server function as the home page: the numbers here are read, not typed.
@@ -51,12 +50,6 @@ function formatDate(value: string | null): string {
 }
 
 function About() {
-  const storeBrow = useInView()
-  const storeTop = useInView()
-  const pipelineBrow = useInView()
-  const pipelineSteps = useInView()
-  const limitsBrow = useInView()
-  const limitsPanel = useInView()
 
   const data = Route.useLoaderData()
   const hasNumbers = data.ok && data.repositories.length > 0
@@ -78,11 +71,11 @@ function About() {
           The numbers on the other page are rows in that database.
         </p>
 
-        <div className="brow" data-reveal ref={storeBrow.ref} data-in={storeBrow.inView ? '' : undefined}>
+        <div className="brow" data-reveal>
           <span>01</span> What is in the store
         </div>
 
-        <div className="about-top" data-reveal ref={storeTop.ref} data-in={storeTop.inView ? '' : undefined}>
+        <div className="about-top" data-reveal>
           {hasNumbers && (
             <div className="panel about-counts">
               <h2>What is in the store right now</h2>
@@ -135,7 +128,7 @@ function About() {
           </div>
         </div>
 
-        <div className="brow" data-reveal ref={pipelineBrow.ref} data-in={pipelineBrow.inView ? '' : undefined}>
+        <div className="brow" data-reveal>
           <span>02</span> The pipeline
         </div>
 
@@ -143,13 +136,7 @@ function About() {
           Collect <i /> Store <i /> Serve <i /> Render
         </div>
 
-        <section
-          className="steps"
-          aria-label="The pipeline"
-          data-reveal
-          ref={pipelineSteps.ref}
-          data-in={pipelineSteps.inView ? '' : undefined}
-        >
+        <section className="steps" aria-label="The pipeline" data-reveal>
           {STEPS.map((step, index) => (
             <article className="step" key={step.title}>
               <span className="step-num">{String(index + 1).padStart(2, '0')}</span>
@@ -159,11 +146,11 @@ function About() {
           ))}
         </section>
 
-        <div className="brow" data-reveal ref={limitsBrow.ref} data-in={limitsBrow.inView ? '' : undefined}>
+        <div className="brow" data-reveal>
           <span>03</span> Limits
         </div>
 
-        <div className="panel limits" data-reveal ref={limitsPanel.ref} data-in={limitsPanel.inView ? '' : undefined}>
+        <div className="panel limits" data-reveal>
           <h2>What it will not claim</h2>
           <ul>
             {LIMITS.map((limit) => (
