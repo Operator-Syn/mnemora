@@ -323,13 +323,38 @@ rest of the page is quiet by comparison.
 keeps applying its final transform, and an active animation outranks a transition on the same
 property — which silently disables every hover transform on the element for the life of the page.
 
+**Focal moment, second pass — the page arriving.** Route changes go through the platform View
+Transitions API (`defaultViewTransition` on the router; no motion library). The outgoing sheet lifts
+8px and fades in 180ms, the incoming one registers 10px down over 300ms. Exits are faster than
+entrances because leaving should not be something you wait for.
+
+**The Motion Choice Rule.** Every animation and transition gates on `html[data-motion='on']`, a value
+resolved *before first paint* by an inline script and written to `<html>`. It starts from
+`prefers-reduced-motion` and can be overridden by the Motion control in the masthead:
+
+| state | what it means |
+|---|---|
+| `Motion: sys` (default) | follows the OS; re-resolves when the OS setting changes |
+| `Motion: on` | animations run even when the OS asks for reduced motion |
+| `Motion: off` | nothing animates, whatever the OS says; the swap is instant |
+
+The control is a three-state cycle like the theme toggle, persisted to `localStorage.motion` (the
+explicit choice only — choosing `sys` clears it). The OS preference is a default, not the only voice:
+a visitor who runs a reduced-motion desktop may still want the page to move, and one with no OS
+preference may want it still.
+
 **The Living Rule.** At least one element must be visibly changing, and it must be reporting something
 true — the cycle gauge, the countdown, the pulse. Motion that reports nothing is noise.
 
-**The Quiet Fallback Rule.** `prefers-reduced-motion: reduce` removes every animation (measured: 47
-animations at rest, 0 under reduce) while the counts, the gauge, and the countdown keep their values.
+**The Quiet Fallback Rule.** Motion off removes every animation and every transition (measured: 46
+animations at rest, 0 with motion off, 0 when the OS asks for reduce and the control is on `sys`) while the counts, the gauge, and the countdown keep their values.
 Content is never hidden behind motion: reveal targets start visible and only animate once JavaScript
 adds `motion-ready`.
+
+**The Footer Rule.** The document is a column at least one viewport tall (`body { min-height: 100dvh;
+display: flex; flex-direction: column }`, `main { flex: 1 0 auto }`). A short page — a 404, an empty
+index — puts the footer against the bottom of the window, not against the bottom of whatever it
+happens to follow.
 
 **The One Line Rule.** The masthead is one row at every width. The `collected hourly` chip is the first
 thing to drop (≤760px), then the nav (≤900px); the wordmark steps down to 22px and 19px. No header
