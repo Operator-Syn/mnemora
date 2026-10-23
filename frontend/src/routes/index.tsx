@@ -80,13 +80,31 @@ function dominantLanguage(repo: Repository): string | null {
   return entries.sort((a, b) => b[1] - a[1])[0][0]
 }
 
+/**
+ * A figure that counts up inside a box sized to its final value. Without the fixed box the digits
+ * grow the inline element by 150px over the animation, the word after it slides sideways and the
+ * line rewraps — once per count, in view, on the largest text on the page.
+ */
+function Tally({ value, final }: { value: number; final: number }) {
+  // The settled text is carried in a data attribute and painted by a hidden pseudo-element, so it
+  // reserves the width without existing twice in the DOM: selecting or copying the headline still
+  // reads "25 repositories, 7,224 commits."
+  return (
+    <span className="tally" data-final={final.toLocaleString()}>
+      <span className="tally-live">{value.toLocaleString()}</span>
+    </span>
+  )
+}
+
 /** Counts a figure up on first paint. Reduced motion lands on the value immediately. */
 function useCountUp(target: number, duration = 900): number {
   const [value, setValue] = useState(target)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // The page's motion switch, not the raw media query: a visitor who allowed motion gets the
+    // count even if their desktop asks for reduced motion, and one who stopped it never sees it.
+    if (document.documentElement.dataset.motion !== 'on') {
       setValue(target)
       return
     }
@@ -227,11 +245,11 @@ function Home() {
             {data.ok && !isEmpty && (
               <>
                 <span className="hl" style={{ animationDelay: '40ms' }}>
-                  {repoCount}
+                  <Tally value={repoCount} final={data.repositories.length} />
                 </span>{' '}
                 repositories,{' '}
                 <span className="hl alt" style={{ animationDelay: '150ms' }}>
-                  {commitCount.toLocaleString()}
+                  <Tally value={commitCount} final={data.totalCommits} />
                 </span>{' '}
                 commits.
               </>
