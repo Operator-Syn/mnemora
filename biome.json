@@ -28,5 +28,21 @@
   },
   "assist": {
     "enabled": false
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!frontend/worker-configuration.d.ts",
+      "!frontend/src/routeTree.gen.ts",
+      "!!frontend/dist",
+      "!!frontend/.wrangler",
+      "!!frontend/.tanstack",
+      "!!frontend/node_modules"
+    ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   }
 }
