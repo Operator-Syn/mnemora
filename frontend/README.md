@@ -102,3 +102,23 @@ guaranteed per-PoP rather than best-effort, pass `cf: { cacheEverything: true, c
   private aggregates do not exist yet.
 - Never render commit data as "authored contribution" — `commit_count` is commits returned by the
   GitHub API for the default branch, and bot commits and merges are included.
+
+## When the page looks like an older build
+
+There are three different things that can hand you stale UI, and only one of them is a cache.
+
+| what you see | what it is | fix |
+|---|---|---|
+| The Worker on `:8787` dies or serves a bundle that no longer exists | `npm run build` rewrites `dist/` underneath a running `wrangler dev`; it prints "Reloading local server..." and stops answering | `npm run dev:worker` — it stops the old server, builds, then starts |
+| Old modules in the Vite dev server on `:3000` | `node_modules/.vite` transform cache after big edits | `npm run dev:fresh` |
+| The tab shows a page you already replaced | browser HTTP cache | hard reload (`Ctrl+Shift+R`) |
+
+```sh
+npm run clean       # dist, dist-ssr, .wrangler, .tanstack, .output, node_modules/.vite
+npm run dev:fresh   # clean + Vite dev
+npm run dev:worker  # stop any running worker, build, serve dist
+```
+
+`npm run dev` (Vite) reads your source directly and is the one to use while editing.
+`npm run dev:worker` runs the real built bundle; it is a snapshot of `dist/`, so it is the one that
+goes stale if you rebuild behind it.
