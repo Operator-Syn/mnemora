@@ -69,6 +69,11 @@ Load in this order, and only what the task needs:
   reads `dist/server/.dev.vars`, which the build copies. Do not strip it at build time; strip at deploy.
 - **`compatibility_date` is the toolchain's choice.** Currently `2026-10-19` from the installed workerd.
   Don't hand-pick a "current" date.
+- **Never write DOM attributes into server-rendered nodes.** The reveal used to set `data-in`
+  imperatively from a root effect. TanStack loads route components lazily, so the root's effect ran
+  before the route hydrated, and React then compared the marked DOM against HTML that never carried
+  the attribute — "A tree hydrated but some attributes … didn't match". React must own anything that
+  appears in markup: the observer returns state and the JSX renders `data-in`.
 - **Motion is gated.** Every animation sits inside `@media (prefers-reduced-motion: no-preference)`.
   Reveal targets start visible; only `html.motion-ready` (added by JS) hides-then-animates.
 - **Colour comes from tokens.** Bright fills (sun, tomato) use `--on-accent`, never `--cream`, and
