@@ -441,39 +441,53 @@ a {
 .card h3 {
   font-family: var(--font-display);
   font-size: 17px;
-  margin: 8px 0 8px;
+  margin: 8px 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.01em;
   /* 1.08 line-height plus a 3px border-bottom on the inline link is what made the
      underline of one line print across the next. Text decoration respects the line
      box; two lines is enough for the longest real repository name. */
   line-height: 1.2;
-  /* A fixed two-line box, not a minimum: a one-line name and a two-line name then
-     occupy the same height, and the rule below lands on the same pixel in every card. */
+  /* A fixed two-line slot, not a minimum: the card keeps its size whether the name runs one line
+     or two. The text block is centred inside that slot, so the rule sits directly under the words
+     at any length instead of floating a line below a short name. */
   height: calc(2.4em + 3px);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   overflow: hidden;
   overflow-wrap: anywhere;
 }
 
 /* The rule belongs to the card, not to the text: a text underline changes with the name's length
-   and disappears when the clamp cuts a line, which is exactly the inconsistency on screen. */
-.card h3 {
-  border-bottom: 3px solid var(--sun);
-  margin-bottom: 12px;
-}
-
+   and disappears when the clamp cuts a line, which is exactly the inconsistency on screen. It is
+   drawn under the anchor rather than under the fixed slot, so it tracks the last line of whatever
+   the name turns out to be. */
 .card h3 a {
+  display: block;
+  width: 100%;
   color: var(--ink);
   text-decoration: none;
+}
+
+.card h3 a::after {
+  content: '';
+  display: block;
+  height: 3px;
+  background: var(--sun);
+  transform-origin: left center;
+}
+
+.card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .card h3 a:hover {
   background: var(--ink);
   color: var(--paper);
-  text-decoration-color: var(--paper);
 }
 
 .card p {
@@ -558,67 +572,7 @@ a {
   border-bottom: 2px solid var(--sun);
 }
 
-/* Cadence --------------------------------------------------------------------
-   The page has to look like it is running. Each device carries information: a
-   newsstand ticker of live facts, a pulsing collector status, chips that filter
-   the index, and stagger used once on entry. All of it stops for anyone who asks
-   for reduced motion.
-   --------------------------------------------------------------------------- */
 
-.ticker {
-  border-bottom: var(--rule-2);
-  background: var(--ink);
-  color: var(--paper);
-  overflow: hidden;
-}
-
-.ticker-track {
-  display: flex;
-  width: max-content;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .ticker-track {
-    animation: ticker-scroll 48s linear infinite;
-  }
-}
-
-.ticker:hover .ticker-track,
-.ticker:focus-within .ticker-track {
-  animation-play-state: paused;
-}
-
-.ticker-run {
-  display: flex;
-}
-
-.ticker-item {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  padding: 8px 0 8px 14px;
-}
-
-.ticker-sep {
-  width: 5px;
-  height: 5px;
-  background: var(--sun);
-  display: inline-block;
-  margin-left: 14px;
-}
-
-@keyframes ticker-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
 
 .status-row {
   display: flex;
@@ -791,8 +745,11 @@ a {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* `backwards`, not `both`: a forwards-filling animation keeps applying its final transform, and
+     an active animation outranks a transition on the same property — which silently killed the
+     card's hover lift for the life of the page. */
   .rise {
-    animation: rise-in 460ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+    animation: rise-in 460ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards;
   }
 }
 
@@ -810,7 +767,7 @@ a {
 @media (prefers-reduced-motion: no-preference) {
   .stack-live i {
     transform-origin: left;
-    animation: grow 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+    animation: grow 520ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards;
   }
 }
 
@@ -1174,3 +1131,91 @@ a {
 }
 
 
+/* Interaction cadence -------------------------------------------------------
+   The page is a running collector, not a screenshot: the status dot pulses, the
+   gauge fills, the refreshed stamp ticks, and the ledger answers the pointer.
+   Every movement below reports something true. All of it is gated on
+   prefers-reduced-motion: no-preference.
+   --------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .card h3 a::after {
+    transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* The rule redraws under the name on hover and on keyboard focus. */
+  .card:hover h3 a::after,
+  .card:focus-within h3 a::after {
+    animation: rule-draw 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .card-tag {
+    transition:
+      background 140ms ease,
+      color 140ms ease,
+      transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .card:hover .card-tag,
+  .card:focus-within .card-tag {
+    background: var(--sun);
+    color: var(--on-accent);
+    transform: rotate(-4deg) translateY(-1px);
+  }
+
+  .legend span {
+    transition: opacity 140ms ease;
+  }
+
+  /* Hovering a legend row dims every other slice, so the pair reads as one object. */
+  .legend[data-focus] span:not([data-on]) {
+    opacity: 0.4;
+  }
+
+  .stack i {
+    transition: opacity 160ms ease;
+  }
+
+  .stack[data-focus] i:not([data-on]) {
+    opacity: 0.25;
+  }
+}
+
+@keyframes rule-draw {
+  from {
+    transform: scaleX(0.24);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Not found ---------------------------------------------------------------- */
+
+.notfound h1 {
+  margin-bottom: 14px;
+}
+
+.cta {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  margin-top: 8px;
+  color: var(--paper);
+  background: var(--ink);
+  border: var(--rule-2);
+  box-shadow: 5px 5px 0 var(--sun);
+  text-decoration: none;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.cta:hover,
+.cta:focus-visible {
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 var(--sun);
+}
