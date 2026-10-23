@@ -81,12 +81,20 @@ src/
   lib/mnemora.ts       server functions + types; the only place that knows the API's shape
   routes/__root.tsx    document shell, theme init, header/footer
   routes/index.tsx     repository index: counts, language mix, cards
+  routes/repositories.$owner.$repo.tsx
+                       project detail: description, 50 recent commits, cursor-loaded older commits
   routes/about.tsx     scaffold placeholder — replace with the real page
   components/          Header, Footer, ThemeToggle
   styles.css           Tailwind 4 entry + the design tokens
 ```
 
 Routes are files. `npm run generate-routes` regenerates `src/routeTree.gen.ts` after adding one.
+
+Repository cards open the internal detail route when their surface is clicked; the highlighted title
+alone opens the GitHub repository. The detail page reads the repository and its first 50 commits on
+the server. “Load commits N–M” fetches the next slice with the API's `before_ms` cursor; the read key
+stays inside server functions. Collection status is shown so an incomplete crawl is not presented as
+complete history.
 
 ## Caching
 
