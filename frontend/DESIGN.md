@@ -181,7 +181,7 @@ list, so add a row here before adding one there.
 | Data | 14px, 1.4 | Plex Mono | key/value rows, tabular numerals |
 | Card body | 13.5px, 1.55 | Public Sans | descriptions, limit list items |
 | Note | 12.5px, 1.5 | Plex Mono | status row, legend, cycle label, `n of m shown` |
-| Label | 11.5px, 0.12em | Plex Mono | chips, brows, ticker, timestamps, card feet |
+| Label | 11.5px, 0.12em | Plex Mono | chips, brows, timestamps, card feet |
 
 **The Numbers Rule.** Every number that a reader might compare is set in IBM Plex Mono with
 `font-variant-numeric: tabular-nums`. Proportional digits are a bug in a data surface.
@@ -230,10 +230,13 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **Background:** paper.
 - **Shadow Strategy:** 6px offset at rest, cobalt at 9px on hover with a -2px translate.
 - **Internal Padding:** 16px 15px 12px.
-- **Title:** a fixed two-line box (`height: calc(2.4em + 3px)`), clamped, with the full name in
-  `title`. The rule under it belongs to the card, not to the text: a per-name underline changes
-  length with the name and vanishes where the clamp cuts a line, which is exactly the
-  inconsistency this replaced.
+- **Title:** a fixed two-line slot (`height: calc(2.4em + 3px)`), with the full name in `title`. The
+  text block is *centred* in that slot and the rule is drawn under the anchor, so the rule tracks the
+  last line of whatever the name turns out to be: no gap between a short name and its rule, and the
+  slot absorbs the difference as space above the words instead. The card keeps one height.
+- **The rule belongs to the card, not to the text.** A per-name underline changes length with the
+  name and vanishes where the clamp cuts a line, which is the inconsistency this replaced; a rule on
+  the anchor is the same length on every card and still sits under the words.
 - **Date:** always `YYYY-MM-DD` on the card. Relative time is reserved for the panel's "most recent
   push" row, so one surface never mixes two date languages.
 - **Description:** three lines maximum, 13.5px, clamped.
@@ -254,12 +257,14 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **Behaviour:** cycles Auto → Light → Dark, writes `data-theme` on `<html>` and persists to
   `localStorage.theme`; Auto follows `prefers-color-scheme`.
 
-### Ticker
+### Ticker (removed)
 
-A full-bleed ink strip under the masthead carrying facts that change: the leading language shares,
-`collected hourly`, the pipeline order, and minutes to the next pass. It scrolls on a 48-second loop
-and pauses on hover or focus. Hidden entirely when reduced motion is requested — the same facts are
-in the panels below, so nothing is lost.
+A full-bleed ink strip used to sit under the masthead carrying the leading language shares,
+`collected hourly`, the pipeline order and minutes to the next pass, scrolling on a 48-second loop.
+It is gone: it repeated numbers the panels already state, competed with the hero for the first
+glance, and its scroll was the one piece of continuous motion in a world whose continuous motion
+should be the cycle gauge. Every fact it carried still has a home — the shares in the language
+panel, the schedule in the status row, the freshness in the ticking stamp.
 
 ### Status row
 
@@ -305,6 +310,18 @@ rest of the page is quiet by comparison.
 - **Bars** — language segments grow from the left edge, 90ms stagger.
 - **Feedback** — chips compress to 0.97 on :active; cards lift 2px with the shadow turning cobalt;
   the card language bar goes from 50% to full opacity.
+- **Title rule** — redraws under the name on hover and on `focus-within` (280ms, from 0.24 scale).
+- **Commit badge** — tilts 4° and fills sunflower on hover; the card's own state, not a new fact.
+- **Legend cross-highlight** — hovering a language row dims every other slice of the mix, so the
+  number and its colour read as one object.
+- **Filter re-deal** — the card list remounts on a filter change, so the stagger runs again and the
+  index visibly answers the click.
+- **Ticking stamp** — `Refreshed n min ago` re-renders every 30s. This is the replacement for the
+  removed fact ticker: one element that keeps counting, and it counts something true.
+
+**The Fill Rule.** Entrance animations use `backwards`, never `both`. A forwards-filling animation
+keeps applying its final transform, and an active animation outranks a transition on the same
+property — which silently disables every hover transform on the element for the life of the page.
 
 **The Living Rule.** At least one element must be visibly changing, and it must be reporting something
 true — the cycle gauge, the countdown, the pulse. Motion that reports nothing is noise.
