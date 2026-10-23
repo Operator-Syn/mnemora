@@ -4,7 +4,6 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
 import RoutePendingVeil from '../components/RoutePendingVeil'
-import { useScrollReveal } from '../lib/reveal'
 
 import appCss from '../styles.css?url'
 
@@ -30,6 +29,11 @@ export const Route = createRootRoute({
       {
         rel: 'stylesheet',
         href: appCss,
+      },
+      {
+        rel: 'icon',
+        href: '/favicon.svg',
+        type: 'image/svg+xml',
       },
     ],
   }),
@@ -64,10 +68,6 @@ function NotFound() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  // Every route relies on this: the pre-paint script hides [data-reveal] nodes, so the observer has
-  // to run for the whole document rather than in whichever route remembered to call it.
-  useScrollReveal()
-
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
