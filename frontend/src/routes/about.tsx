@@ -67,6 +67,10 @@ function About() {
           The numbers on the other page are rows in that database.
         </p>
 
+        <div className="brow">
+          <span>01</span> What is in the store
+        </div>
+
         <div className="about-top">
           {hasNumbers && (
             <div className="panel about-counts">
@@ -120,6 +124,14 @@ function About() {
           </div>
         </div>
 
+        <div className="brow">
+          <span>02</span> The pipeline
+        </div>
+
+        <div className="pipeline-rail" aria-hidden="true">
+          Collect <i /> Store <i /> Serve <i /> Render
+        </div>
+
         <section className="steps" aria-label="The pipeline">
           {STEPS.map((step, index) => (
             <article className="step" key={step.title}>
@@ -129,6 +141,10 @@ function About() {
             </article>
           ))}
         </section>
+
+        <div className="brow">
+          <span>03</span> Limits
+        </div>
 
         <div className="panel limits">
           <h2>What it will not claim</h2>

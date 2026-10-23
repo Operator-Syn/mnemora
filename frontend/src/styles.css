@@ -285,7 +285,7 @@ a {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 22px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .panel {
@@ -524,6 +524,295 @@ a {
   color: var(--cream);
   text-decoration: none;
   border-bottom: 2px solid var(--sun);
+}
+
+/* Cadence --------------------------------------------------------------------
+   The page has to look like it is running. Each device carries information: a
+   newsstand ticker of live facts, a pulsing collector status, chips that filter
+   the index, and stagger used once on entry. All of it stops for anyone who asks
+   for reduced motion.
+   --------------------------------------------------------------------------- */
+
+.ticker {
+  border-bottom: var(--rule-2);
+  background: var(--ink);
+  color: var(--paper);
+  overflow: hidden;
+}
+
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 48s linear infinite;
+}
+
+.ticker:hover .ticker-track,
+.ticker:focus-within .ticker-track {
+  animation-play-state: paused;
+}
+
+.ticker-run {
+  display: flex;
+}
+
+.ticker-item {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding: 8px 0 8px 14px;
+}
+
+.ticker-sep {
+  width: 5px;
+  height: 5px;
+  background: var(--sun);
+  display: inline-block;
+  margin-left: 14px;
+}
+
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 28px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.pulse {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.pulse .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tomato);
+  animation: pulse-dot 2.4s ease-out infinite;
+}
+
+.status-sep {
+  width: 20px;
+  height: 2px;
+  background: var(--ink);
+  opacity: 0.3;
+}
+
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 31, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(255, 59, 31, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 31, 0);
+  }
+}
+
+/* Numbered brows: the section marker a printed notice uses to keep its order legible. */
+.brow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 36px 0 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.brow span {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 2px 6px;
+}
+
+.brow::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: var(--ink);
+  opacity: 0.22;
+}
+
+.panel-note {
+  margin: 12px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--rule-2);
+  padding: 5px 9px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.chip b {
+  font-weight: 400;
+  opacity: 0.55;
+  margin-left: 2px;
+}
+
+.chip:hover {
+  background: var(--sun);
+  color: var(--on-accent);
+  transform: translateY(-1px);
+}
+
+.chip[data-active="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.chip[data-active="true"] b {
+  opacity: 0.7;
+}
+
+/* The card's language split, visible at rest as a hint and fully on hover/focus. */
+.card-bar {
+  display: flex;
+  height: 6px;
+  margin: 0 0 10px;
+  border: var(--rule-2);
+  background: var(--paper);
+  overflow: hidden;
+  opacity: 0.5;
+  transition: opacity 140ms ease;
+}
+
+.card:hover .card-bar,
+.card:focus-within .card-bar {
+  opacity: 1;
+}
+
+.card-bar i {
+  display: block;
+  height: 100%;
+  border-right: 2px solid var(--ink);
+}
+
+.card-bar i:last-child {
+  border-right: 0;
+}
+
+.rise {
+  animation: rise-in 460ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stack-live i {
+  transform-origin: left;
+  animation: grow 520ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+@keyframes grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  border-bottom: 3px solid var(--sun);
+  cursor: pointer;
+}
+
+.repos-empty {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+/* The pipeline rail above the four steps on /about. */
+.pipeline-rail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pipeline-rail i {
+  width: 18px;
+  height: 2px;
+  background: var(--ink);
+  opacity: 0.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track,
+  .pulse .dot,
+  .rise,
+  .stack-live i {
+    animation: none !important;
+  }
+
+  .chip,
+  .card,
+  .card-bar {
+    transition: none;
+  }
 }
 
 /* Responsive ---------------------------------------------------------------- */

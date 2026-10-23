@@ -44,7 +44,16 @@ export interface RepositoryIndex {
   repositories: Repository[]
   totalCommits: number
   languages: Array<{ name: string; bytes: number; share: number }>
+  /** Distinct languages across all repositories — the mix below is only the top eight. */
+  languageCount: number
+  /** Share of bytes not covered by `languages`, so the bar always sums to 100%. */
+  otherShare: number
   refreshedAt: string | null
+  /**
+   * Minutes until the collector's next hourly pass. Computed on the server so the HTML and the
+   * hydrated client agree; a clock read on both sides would render two different numbers.
+   */
+  nextPassInMinutes: number
 }
 
 function apiUrl(): string {
@@ -82,7 +91,10 @@ export const getRepositoryIndex = createServerFn({ method: 'GET' }).handler(
       repositories: [],
       totalCommits: 0,
       languages: [],
+      languageCount: 0,
+      otherShare: 0,
       refreshedAt: null,
+      nextPassInMinutes: 0,
     }
 
     let key: string
@@ -115,17 +127,24 @@ export const getRepositoryIndex = createServerFn({ method: 'GET' }).handler(
       a.full_name.localeCompare(b.full_name),
     )
 
+    const ranked = rankLanguages(repositories)
+    const top = ranked.slice(0, 8)
+
     return {
       ok: true,
       repositories,
       totalCommits: repositories.reduce((total, repo) => total + (repo.commit_count ?? 0), 0),
-      languages: rankLanguages(repositories).slice(0, 8),
+      languages: top,
+      languageCount: ranked.length,
+      otherShare: Math.max(0, 1 - top.reduce((sum, entry) => sum + entry.share, 0)),
       refreshedAt:
         repositories
           .map((repo) => repo.refreshed_at_utc)
           .filter((value): value is string => Boolean(value))
           .sort()
           .at(-1) ?? null,
+      // The collect workflow is scheduled on the hour, so the next pass is simply the next :00.
+      nextPassInMinutes: 60 - new Date().getUTCMinutes() || 60,
     }
   },
 )
