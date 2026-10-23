@@ -46,16 +46,24 @@ fi
 # download, no resolution, so the gate costs milliseconds instead of a network round trip. The
 # version is whatever frontend/package.json pins, which is the same one biome.json targets.
 #
+# Only paths that still exist are linted. A deletion has nothing to check, and passing the missing
+# path to biome fails the commit with "No such file or directory" — which quietly made the hook
+# refuse every file removal in this repository.
+#
 # --write fixes in the working tree, which would leave the commit holding the unfixed bytes;
 # re-adding keeps what was fixed and what is committed the same file. The command's exit code
 # is the hook's, so a remaining error fails the commit.
 biome_bin="$(git rev-parse --show-toplevel)/frontend/node_modules/.bin/biome"
 
-if [ -x "$biome_bin" ]; then
+if [ ! -e "$staged" ]; then
+  echo "pre-commit: $staged is a deletion — nothing to lint."
+elif [ -x "$biome_bin" ]; then
   "$biome_bin" check --write --no-errors-on-unmatched --files-max-size=2097152 "$staged"
 else
   echo "pre-commit: biome is not installed — run 'npm install' in frontend/." >&2
   echo "pre-commit: skipping the lint step so the one-file check still stands." >&2
 fi
 
-git add -- "$staged"
+if [ -e "$staged" ]; then
+  git add -- "$staged"
+fi
