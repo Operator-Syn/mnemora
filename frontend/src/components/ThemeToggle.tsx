@@ -74,7 +74,7 @@ export default function ThemeToggle() {
       type="button"
       onClick={toggleMode}
       aria-label={label}
-      title={label}
+      data-tip={label}
       className="theme-toggle"
     >
       {/* Same trick as the motion control: the server cannot know the stored mode, so all three
