@@ -334,8 +334,9 @@ bytes belong to nothing.
   the card language bar goes from 50% to full opacity.
 - **Title rule** — redraws under the name on hover and on `focus-within` (280ms, from 0.24 scale).
 - **Commit badge** — tilts 4° and fills sunflower on hover; the card's own state, not a new fact.
-- **Legend cross-highlight** — hovering a language row dims every other slice of the mix, so the
-  number and its colour read as one object.
+- **Legend cross-highlight** — hovering a language row dims every other slice of the mix, and
+  hovering a slice dims every other row: the pair reads as one object from either side. Each slice
+  also names itself and its share on hover, so the bar is not a colour-matching puzzle.
 - **Filter re-deal** — the card list remounts on a filter change, so the stagger runs again and the
   index visibly answers the click.
 - **Ticking stamp** — `Refreshed n min ago` re-renders every 30s. This is the replacement for the
