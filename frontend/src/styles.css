@@ -927,8 +927,8 @@ a {
 /* The collection cycle as a printed gauge: how far through the hour we are. */
 .cycle {
   position: relative;
-  height: 5px;
-  margin: -16px 0 30px;
+  height: 6px;
+  margin: 0 0 30px;
   background: color-mix(in srgb, var(--ink) 16%, transparent);
   border: 0;
   overflow: hidden;
@@ -946,7 +946,8 @@ a {
 .cycle-label {
   display: flex;
   justify-content: space-between;
-  margin: 0 0 6px;
+  gap: 12px;
+  margin: 0 0 8px;
   font-family: var(--font-mono);
   font-size: 11.5px;
   letter-spacing: 0.1em;
