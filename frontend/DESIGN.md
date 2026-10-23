@@ -211,6 +211,11 @@ anywhere, and no blur is used for depth.
 
 **The No-Blur Rule.** If a shadow has a blur radius, it belongs to another design system.
 
+**The Shadow-Not-Border Rule.** Offsets come from `--shadow-solid`, which is dark in *both* themes
+(`#12100e` light, `#000` dark). Using the ink token made the dark-theme shadow cream, so every card
+read as a double border instead of a lifted sheet. In dark mode the card paper is also lighter than
+the ground (`#241f16` on `#12100a`), so panels sit above the page rather than below it.
+
 ## Shapes
 
 Square. `border-radius` is 0 everywhere except the browser's own form controls. Borders are ink at
@@ -225,8 +230,12 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **Background:** paper.
 - **Shadow Strategy:** 6px offset at rest, cobalt at 9px on hover with a -2px translate.
 - **Internal Padding:** 16px 15px 12px.
-- **Title:** two lines maximum, `line-height: 1.2`, underline drawn with `text-decoration` (a
-  `border-bottom` on a wrapped inline link prints across the next line's text). Full name in `title`.
+- **Title:** a fixed two-line box (`height: calc(2.4em + 3px)`), clamped, with the full name in
+  `title`. The rule under it belongs to the card, not to the text: a per-name underline changes
+  length with the name and vanishes where the clamp cuts a line, which is exactly the
+  inconsistency this replaced.
+- **Date:** always `YYYY-MM-DD` on the card. Relative time is reserved for the panel's "most recent
+  push" row, so one surface never mixes two date languages.
 - **Description:** three lines maximum, 13.5px, clamped.
 - **Language bar:** 8px, 1px ink track border, pushed down with `margin-top: auto`.
 - **Commit badge:** tomato, `on-accent` text, 2px ink border, 11.5px mono uppercase, offset -10px above
@@ -308,6 +317,9 @@ adds `motion-ready`.
 **The One Line Rule.** The masthead is one row at every width. The `collected hourly` chip is the first
 thing to drop (≤760px), then the nav (≤900px); the wordmark steps down to 22px and 19px. No header
 control may wrap to a second line.
+
+**The One Rule Rule.** A decorative rule belongs to the container it separates, never to a run of
+text: container rules are the same length on every card, text underlines are not.
 
 **The Printed Gauge Rule.** Never animate `width` for the cycle; it is a `transform: scaleX()` on an
 inner element so the paint stays cheap.
