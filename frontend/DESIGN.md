@@ -307,7 +307,14 @@ rest of the page is quiet by comparison.
 - **Live countdown** — `NEXT PASS IN n MIN` decrements locally from the server-rendered value.
 - **Section rules** — brows draw their hairline across on first view (460ms, 100ms delay).
 - **Card entrance** — 10px rise with 45ms stagger, first 12 only, once per load.
-- **Bars** — language segments grow from the left edge, 90ms stagger.
+- **The stack** — every segment is at its true width in every frame; the whole bar prints up
+  (opacity 0.25 → 1 over 420ms). It used to grow segment by segment with a 90ms stagger, and any
+  glance during that second read the unfilled track as unlabelled data.
+
+**The Closed Proportion Rule.** A stacked bar reaches the right edge, always. Rounded shares leave a
+percent unaccounted for, so the remainder is folded into `Other` before rendering; tiny slices get a
+3px minimum *without* inflating their percentage, because a bar that stops short is a claim that some
+bytes belong to nothing.
 - **Feedback** — chips compress to 0.97 on :active; cards lift 2px with the shadow turning cobalt;
   the card language bar goes from 50% to full opacity.
 - **Title rule** — redraws under the name on hover and on `focus-within` (280ms, from 0.24 scale).
