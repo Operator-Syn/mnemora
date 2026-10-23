@@ -212,11 +212,11 @@ function Home() {
             )}
             {data.ok && !isEmpty && (
               <>
-                <span className="hl" style={{ animationDelay: '40ms' }}>
+                <span className="hl" style={{ animationDelay: '340ms' }}>
                   <Tally value={repoCount} final={data.repositories.length} />
                 </span>{' '}
                 repositories,{' '}
-                <span className="hl alt" style={{ animationDelay: '150ms' }}>
+                <span className="hl alt" style={{ animationDelay: '450ms' }}>
                   <Tally value={commitCount} final={data.totalCommits} />
                 </span>{' '}
                 commits.
@@ -416,7 +416,7 @@ function Home() {
                       <article
                         key={`${language ?? 'all'}:${repo.repository_id}`}
                         className="card rise"
-                        style={{ animationDelay: `${Math.min(index, 11) * 45}ms` }}
+                        style={{ animationDelay: `${300 + Math.min(index, 11) * 45}ms` }}
                       >
                         <span className="card-tag" title={`${repo.commit_count ?? 0} commits`}>
                       {repo.commit_count ?? 0}
