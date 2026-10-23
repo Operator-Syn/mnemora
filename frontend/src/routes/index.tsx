@@ -23,12 +23,15 @@ const STACK_COLOURS = [
   'var(--ink)',
   '#7a8b00',
   '#8a5cff',
-  '#c9c2b0',
+  '#8f1d3f',
   '#0f6b5c',
 ]
 
-/** STACK_COLOURS[6] is the neutral "other" swatch used by the legend. */
-const OTHER_COLOUR = STACK_COLOURS[6]
+/**
+ * The neutral swatch is reserved for "Other". It used to double as the seventh ranked colour, so
+ * Java and Other rendered in the same pale grey and the tail of the bar read as one unnamed block.
+ */
+const OTHER_COLOUR = '#c9c2b0'
 
 function languageColour(name: string, ranked: ReadonlyArray<{ name: string }>): string {
   const index = ranked.findIndex((entry) => entry.name === name)
@@ -367,7 +370,7 @@ function Home() {
                         data-on={focusedLanguage === 'Other' ? '' : undefined}
                         style={{
                           width: `${otherTotal * 100}%`,
-                          background: STACK_COLOURS[6],
+                          background: OTHER_COLOUR,
                         }}
                       />
                     )}
@@ -395,7 +398,7 @@ function Home() {
                         onMouseEnter={() => setFocusedLanguage('Other')}
                         onMouseLeave={() => setFocusedLanguage(null)}
                       >
-                        <i className="sw" style={{ background: STACK_COLOURS[6] }} />
+                        <i className="sw" style={{ background: OTHER_COLOUR }} />
                         Other {(otherTotal * 100).toFixed(0)}%
                       </span>
                     )}
