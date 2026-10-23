@@ -79,7 +79,13 @@ export default function MotionToggle() {
       title={DESCRIPTIONS[mode]}
       className="theme-toggle motion-toggle"
     >
-      {LABELS[mode]}
+      {/* All three labels ship in the HTML and CSS shows the one matching html[data-motion-mode],
+          which the inline script sets before first paint. Rendering only the current mode meant the
+          server always sent "sys" and hydration swapped it to "on" — a visible flicker on every
+          load, and the flash is the largest text change in the masthead. */}
+      <span data-mode="system">{LABELS.system}</span>
+      <span data-mode="on">{LABELS.on}</span>
+      <span data-mode="off">{LABELS.off}</span>
     </button>
   )
 }
