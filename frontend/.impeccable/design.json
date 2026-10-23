@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T17:30:00+08:00",
+  "generatedAt": "2026-10-23T22:45:29+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -142,6 +142,14 @@
         "displayName": "Mark",
         "purpose": "Masthead wordmark, 30px Anton."
       },
+      "mark-compact-tablet": {
+        "displayName": "Mark (compact tablet)",
+        "purpose": "22px Anton at the tablet masthead breakpoint."
+      },
+      "mark-compact-phone": {
+        "displayName": "Mark (compact phone)",
+        "purpose": "19px Anton at the phone masthead breakpoint."
+      },
       "headline": {
         "displayName": "Headline",
         "purpose": "Section titles, 24px Anton."
@@ -154,9 +162,21 @@
         "displayName": "Title",
         "purpose": "Panel titles, 19px Anton."
       },
+      "long-repo-title": {
+        "displayName": "Long repository title",
+        "purpose": "Full detail-page repository name over 35 characters; responsive Anton display scale below a smaller mono owner attribution."
+      },
       "card-title": {
         "displayName": "Card title",
         "purpose": "Repository names, 17px Anton."
+      },
+      "repo-title": {
+        "displayName": "Repository detail title",
+        "purpose": "Fluid Anton title, clamp(36px, 6vw, 64px)."
+      },
+      "repo-state-title": {
+        "displayName": "Repository state title",
+        "purpose": "Fluid Anton error-state heading, clamp(28px, 4vw, 42px)."
       },
       "body-small": {
         "displayName": "Body small",
@@ -214,9 +234,56 @@
         "purpose": "The language stack fading up at full width; never drawn partially filled."
       },
       {
+        "name": "cycle-progress",
+        "value": "1s linear fill and index mark; 1.4s fixed-tile print stripe",
+        "purpose": "Shows elapsed-hour progress and live collector cadence; the stripe advances exactly one repeat tile per cycle and stops when motion is off."
+      },
+      {
+        "name": "card-ledger-register",
+        "value": "8s linear infinite; 1.4s initial delay + 150ms per rank",
+        "purpose": "A 5px cobalt stroke draws across each card's top rule over 480ms in commit-rank order; the badge press and arrow nudge remain on their original 8s cadence with 150ms rank offsets. Stored metrics stay still.",
+        "reducedMotion": "Stopped when html[data-motion='off']"
+      },
+      {
+        "name": "card-corner-register",
+        "value": "5.4s cubic-bezier(0.16,1,0.3,1) infinite; independent phase every 600ms over nine bounded ranks",
+        "purpose": "Four tomato crop marks press and recoil on their own cadence and do not synchronize with or reset alongside the cobalt pass; marks stay behind the commit label and repository content remains still.",
+        "reducedMotion": "Stopped when html[data-motion='off']"
+      },
+      {
+        "name": "card-index-tab",
+        "value": "3.2s infinite; 300ms phase slots across 9 ranks",
+        "purpose": "A sunflower registration tab makes a short independent snap between ordered ledger passes; the modulo phase stays bounded as repositories are added.",
+        "reducedMotion": "Stopped when html[data-motion='off']"
+      },
+      {
+        "name": "card-title-reprint",
+        "value": "4.8s ease-in-out infinite; 240ms phase slots across 7 ranks",
+        "purpose": "The existing sunflower external-link underline briefly registers twice on an independent bounded cadence; the line stays visible, and the animation never changes repository text or data.",
+        "reducedMotion": "Stopped when html[data-motion='off']; existing hover/focus rule-draw takes precedence"
+      },
+      {
         "name": "count-up",
         "value": "900ms cubic ease-out",
-        "purpose": "Hero totals counting from zero inside a box sized to the final value."
+        "purpose": "Hero totals counting inside a box sized to the final value. Runs only when the figure moved since this document last showed it, and from that previous value to the new one — a returning navigation over unchanged figures must not replay the climb."
+      },
+      {
+        "name": "cursor-link-step",
+        "value": "840ms steps(1,end) infinite, armed on :hover",
+        "purpose": "The drawn hand pointer rests 700ms then presses for 140ms, stepped frame by frame because an animated image cannot animate a cursor. Only the hovered control animates; motion off holds the resting frame.",
+        "reducedMotion": "Stopped when html[data-motion='off']; the resting frame remains"
+      },
+      {
+        "name": "cursor-wait-step",
+        "value": "1s steps(1,end) infinite",
+        "purpose": "Eight 125ms frames of the drawn wait ring while the pending veil blocks the page.",
+        "reducedMotion": "Stopped when html[data-motion='off']; the resting frame remains"
+      },
+      {
+        "name": "cursor-working-step",
+        "value": "1s steps(1,end) infinite",
+        "purpose": "The drawn progress pointer turns while older commits load, because that fetch is busy while the page itself stays usable.",
+        "reducedMotion": "Stopped when html[data-motion='off']; the resting frame remains"
       },
       {
         "name": "card-hover",
@@ -248,12 +315,66 @@
   },
   "components": [
     {
+      "name": "Repository Detail Heading",
+      "kind": "custom",
+      "description": "Short repository names retain the quiet inline owner prefix and large sunflower-highlighted name. Names over 35 characters move the owner to a smaller mono attribution line and set the full name below at a balanced, controlled display size; names are never truncated.",
+      "html": "<h1 class=\"repo-title\" data-long-name=\"true\"><span class=\"repo-title-owner\">Team-Fourth-Loop/</span><span class=\"repo-title-name\">Conway-s-Game-of-Life-forked-by-Team-Fourth-Loop-Ryche</span></h1>",
+      "css": ".repo-title[data-long-name='true']{font-size:clamp(38px,4.4vw,48px);line-height:1.12;text-wrap:balance}.repo-title[data-long-name='true'] .repo-title-owner{display:block;margin-bottom:.24em;font-size:.34em;line-height:1.3}.repo-title[data-long-name='true'] .repo-title-name{display:block;max-width:900px}.repo-title-name{background:var(--sun);color:var(--on-accent);box-decoration-break:clone;padding:0 .06em}"
+    },
+    {
+      "name": "Ledger Registration Pass",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "A 5px cobalt top-edge stroke draws across each card over 480ms in commit-rank order. Four tomato corner marks press and recoil on their independent 5.4s loop with nine bounded phase slots; they do not synchronize with the cobalt stroke. The badge press and external-link arrow nudge keep their original 8s cadence. The commit label is z-index 4 above the stroke at 3 and marks at 2. An independent sunflower tab runs on a 3.2s loop over nine bounded phases; the title underline re-registers on a 4.8s loop over seven.",
+      "html": "<article class=\"card\" style=\"--card-wave-delay: 0ms; --card-register-phase: -600ms; --card-tab-phase: 0ms; --card-reprint-phase: 0ms\"><svg class=\"card-register\" aria-hidden=\"true\" viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\"><path d=\"M0 7V0H4 M96 0H100V7 M100 93V100H96 M4 100H0V93\"/></svg><!-- repository card content --></article>",
+      "css": ".card::before{position:absolute;inset:-3px auto auto -3px;width:calc(100% + 6px);height:5px;background:var(--cobalt);transform:scaleX(0);transform-origin:left center;opacity:0;pointer-events:none}.card::after{position:absolute;left:-8px;bottom:10px;width:12px;height:12px;border:2px solid var(--ink);background:var(--sun);box-shadow:2px 2px 0 var(--shadow-solid);opacity:.8;pointer-events:none}html[data-motion='on'] .card::before,html[data-motion='on'] .card-tag,html[data-motion='on'] .card-title-link .card-link-mark{animation-duration:8s;animation-iteration-count:infinite;animation-delay:calc(1400ms + var(--card-wave-delay,0ms))}html[data-motion='on'] .card::after{animation:card-index-tab 3.2s infinite;animation-delay:var(--card-tab-phase,0ms)}@keyframes card-index-tab{0%,68%,100%{transform:translate(0,0) rotate(0deg) scale(.92);opacity:.8}72%{transform:translate(3px,-2px) rotate(90deg) scale(1.2);opacity:1}77%{transform:translate(0,0) rotate(0deg) scale(.92);opacity:.8}}"
+    },
+    {
+      "name": "Repository Title Reprint",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "The existing sunflower external-link underline makes a brief double registration on its own 4.8s loop, phased independently over seven bounded slots. The line remains present; hover/focus redraw takes precedence; repository text and values never move.",
+      "html": "<a class=\"card-title-link\" href=\"#github\" style=\"--card-reprint-phase: -240ms\"><span class=\"card-title-wrap\"><span class=\"card-title\">operator-synaciel</span></span></a>",
+      "css": "html[data-motion='on'] .card-title-wrap::after{animation:card-title-reprint 4.8s ease-in-out infinite;animation-delay:var(--card-reprint-phase,0ms)}@keyframes card-title-reprint{0%,78%,100%{transform:scaleX(1)}80%{transform:scaleX(.72)}82%{transform:scaleX(1)}84%{transform:scaleX(.9)}86%{transform:scaleX(1)}}"
+    },
+    {
+      "name": "Corner Registration Marks",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Four inset tomato crop marks press and recoil on an independent 5.4s cadence, phased every 600ms across nine bounded slots. They never sync to the cobalt pass; they are non-semantic, behind the commit badge, and do not move card content.",
+      "html": "<svg class=\"card-register\" aria-hidden=\"true\" viewBox=\"0 0 100 100\" preserveAspectRatio=\"none\"><path d=\"M0 7V0H4 M96 0H100V7 M100 93V100H96 M4 100H0V93\"/></svg>",
+      "css": ".card-register{position:absolute;top:6px;left:6px;width:calc(100% - 12px);height:calc(100% - 12px);z-index:2;overflow:visible;fill:none;stroke:var(--tomato);stroke-width:2px;stroke-linecap:square;vector-effect:non-scaling-stroke;transform:scale(.94);transform-box:fill-box;transform-origin:center;opacity:0;pointer-events:none}html[data-motion='on'] .card-register{animation:card-corner-register 5.4s cubic-bezier(.16,1,.3,1) infinite;animation-delay:var(--card-register-phase,0ms)}@keyframes card-corner-register{0%,4%,100%{opacity:0;transform:scale(.94)}5%{opacity:1;transform:scale(1)}6%{opacity:1;transform:scale(1.02)}7%{opacity:.72;transform:scale(.98)}8%{opacity:0;transform:scale(1)}}"
+    },
+    {
+      "name": "Pointer",
+      "kind": "custom",
+      "description": "The system cursor is replaced by a 24px drawn set: arrow on <html>, stepped hand on links and controls, I-beam on prose, stepped wait ring on the pending veil, stepped progress arrow on the disabled commit button. Unused actions (grab, zoom, resize, help, copy, alias, context menu) ship no cursor. Hotspots come from each frame's alpha channel; motion off keeps the artwork and drops the stepping.",
+      "html": "<html style=\"--cursor-default: url('/cursors/default.png') 2 1\"><!-- a, button, summary carry url('/cursors/animated/pointer/frame_00.png') 8 4 --></html>",
+      "css": ":root{--cursor-default:url('/cursors/default.png') 2 1;--cursor-text:url('/cursors/text.png') 12 12;--cursor-link:url('/cursors/animated/pointer/frame_00.png') 8 4;--cursor-busy:url('/cursors/animated/wait/frame_00.png') 12 12;--cursor-working:url('/cursors/animated/progress/frame_00.png') 2 1}html{cursor:var(--cursor-default),default}:is(p,li,dt,dd,pre,code,blockquote){cursor:var(--cursor-text),text}a,button,summary{cursor:var(--cursor-link),pointer}a *,button *,summary *{cursor:inherit}.pending-veil,.pending-veil *{cursor:var(--cursor-busy),wait}@keyframes cursor-link-step{0%{cursor:url('/cursors/animated/pointer/frame_00.png') 8 4,pointer}83.333%{cursor:url('/cursors/animated/pointer/frame_01.png') 8 4,pointer}}html[data-motion='on'] a:hover,html[data-motion='on'] button:hover:not(:disabled),html[data-motion='on'] summary:hover{animation:cursor-link-step 840ms steps(1,end) infinite}"
+    },
+    {
       "name": "Repository Card",
       "kind": "card",
       "refersTo": "card",
-      "description": "One public repository: commit badge, name in a fixed two-line slot, description, push date and language. The rule sits under the name, not at the slot's bottom.",
-      "html": "<article class=\"ds-card\"><span class=\"ds-card-tag\">2,889</span><h3><a href=\"#\"><span class=\"ds-card-title\">operator-synaciel</span></a></h3><p>The Operator-Syn site portfolio.</p><div class=\"ds-card-foot\"><span>2026-10-20</span><span>TypeScript</span></div></article>",
-      "css": ".ds-card{position:relative;border:3px solid var(--ink);background:var(--paper);color:var(--ink);padding:16px 15px 12px;box-shadow:6px 6px 0 var(--shadow-solid);transition:box-shadow 120ms ease,transform 120ms ease;display:flex;flex-direction:column}.ds-card:hover{transform:translate(-2px,-2px);box-shadow:9px 9px 0 var(--cobalt)}.ds-card h3{font-family:var(--font-display);font-size:17px;margin:8px 0 12px;text-transform:uppercase;line-height:1.2;height:calc(2.4em + 3px);display:flex;flex-direction:column;justify-content:center;overflow:hidden}.ds-card h3 a{display:block;width:100%;color:var(--ink);text-decoration:none}.ds-card h3 a::after{content:\"\";display:block;height:3px;background:var(--sun);transform-origin:left center}.ds-card-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}"
+      "description": "One public repository: the paper surface links internally to project details and recent commits. Only the highlighted title and its square-arrow mark link to GitHub; hovering that title alone highlights the external action. The two-line title rule tracks the final line without changing card height.",
+      "html": "<article class=\"ds-card\"><h3><a class=\"ds-card-title-link\" href=\"https://github.com/Operator-Syn/operator-synaciel\" aria-label=\"Open Operator-Syn/operator-synaciel on GitHub\"><span class=\"ds-card-title-wrap\"><span class=\"ds-card-title\">operator-synaciel</span></span><svg class=\"ds-card-link-mark\" aria-hidden=\"true\" viewBox=\"0 0 16 16\"><path d=\"M9 2h5v5M14 2 7 9\"/><path d=\"M12 9v4H2V3h4\"/></svg></a></h3><a class=\"ds-card-detail-link\" href=\"/repositories/Operator-Syn/operator-synaciel\" aria-label=\"View Operator-Syn/operator-synaciel project details and recent commits\"><p>The Operator-Syn site portfolio.</p></a></article>",
+      "css": ".ds-card{position:relative;isolation:isolate;border:3px solid var(--ink);background:var(--paper);color:var(--ink);padding:16px 15px 12px;box-shadow:6px 6px 0 var(--shadow-solid);display:flex;flex-direction:column}.ds-card-detail-link{display:flex;flex:1;flex-direction:column;color:inherit;text-decoration:none;cursor:pointer}.ds-card-detail-link::after{content:\"\";position:absolute;inset:0;z-index:0}.ds-card-detail-link>*{position:relative;z-index:1}.ds-card:hover,.ds-card:focus-within{transform:translate(-2px,-2px);box-shadow:9px 9px 0 var(--cobalt);outline:3px solid var(--cobalt);outline-offset:2px}.ds-card h3{position:relative;z-index:2;font-family:var(--font-display);font-size:17px;margin:8px 0 12px;text-transform:uppercase;line-height:1.2;height:calc(2.4em + 3px);display:flex;align-items:center;gap:8px;overflow:hidden}.ds-card-title-link{display:inline-flex;width:fit-content;max-width:100%;align-items:center;gap:8px;color:inherit;text-decoration:none}.ds-card-title-wrap{display:block;flex:1;min-width:0}.ds-card-title-wrap::after{content:\"\";display:block;height:3px;background:var(--sun);transform-origin:left center}.ds-card-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.ds-card-link-mark{display:block;flex:0 0 16px;width:16px;height:16px;stroke:currentColor;stroke-width:1.6}.ds-card-title-link:hover .ds-card-title-wrap{background:var(--ink);color:var(--paper)}.ds-card-title-link:hover .ds-card-link-mark{color:var(--cobalt)}"
+    },
+    {
+      "name": "Cycle Gauge",
+      "kind": "progress",
+      "refersTo": "cycle",
+      "description": "Square Civic Poster progress gauge. Accessible fill and sunflower index mark follow true wall-clock hour progress with one-second readings; fixed tick marks and a paper track establish the printed-measure look. A narrow stripe pattern travels through cobalt fill by one exact 28px tile per 1.4s cycle, seamless because its start and end background positions are identical. The stripe stops when motion is off.",
+      "html": "<div class=\"cycle\" role=\"progressbar\" aria-label=\"Progress through the current collection hour\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"20\"><i style=\"--progress: 0.2\"></i><b aria-hidden=\"true\"></b></div>",
+      "css": ".cycle{position:relative;height:12px;background:var(--paper);border:2px solid var(--ink);overflow:hidden}.cycle::after{content:\"\";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0 14px,var(--ink) 14px 16px);opacity:.18}.cycle i{position:relative;display:block;height:100%;background:var(--cobalt);transform-origin:left;transform:scaleX(var(--progress,0));overflow:hidden}.cycle i::after{content:\"\";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 12px,color-mix(in srgb,var(--paper) 72%,transparent) 12px 16px,transparent 16px 28px)}.cycle b{position:absolute;z-index:1;top:-1px;bottom:-1px;left:calc(var(--progress,0)*100%);width:6px;background:var(--sun);border-inline:2px solid var(--ink);transform:translateX(-50%)}html[data-motion='on'] .cycle i{transition:transform 1000ms linear}html[data-motion='on'] .cycle i::after{animation:cycle-ink-run 1400ms linear infinite}html[data-motion='on'] .cycle b{transition:left 1000ms linear}html[data-motion='off'] .cycle i::after{animation:none}@keyframes cycle-ink-run{to{background-position:28px 0}}"
+    },
+    {
+      "name": "Branded Tooltip",
+      "kind": "custom",
+      "refersTo": "tip",
+      "description": "A shared portal for pointer and keyboard help notes. Square paper on ink rules, a tomato registration edge, mono label, and hard offset shadow; never a browser-native title popup. Card language segments show their own share, while the whole bar track supplies a concise leading-share fallback so its border and gaps are not dead hover zones.",
+      "html": "<div id=\"mnemora-tooltip\" class=\"tip\" role=\"tooltip\" data-side=\"above\">Rust · 6%</div>",
+      "css": ".tip{position:fixed;z-index:10000;width:max-content;max-width:min(280px,calc(100vw - 24px));padding:7px 10px;border:2px solid var(--ink);border-top:5px solid var(--tomato);background:var(--paper);color:var(--ink);box-shadow:4px 4px 0 var(--shadow-solid);font-family:var(--font-mono);font-size:11.5px;line-height:1.35;pointer-events:none}"
     },
     {
       "name": "Theme Toggle",
@@ -313,6 +434,46 @@
     ],
     "rules": [
       {
+        "name": "The Tooltip Surface Rule",
+        "body": "Supplemental hover/focus notes use one shared portal in the printed-notice palette, never browser-native title popups. They remain supplementary and are reachable by pointer and keyboard.",
+        "section": "components"
+      },
+      {
+        "name": "The Stepped Cursor Rule",
+        "body": "An animated image cannot animate a cursor, so each animated cursor set is stepped frame by frame with a keyframed cursor value and steps(1, end). Hotspots are read from each frame's alpha channel rather than guessed.",
+        "section": "components"
+      },
+      {
+        "name": "The Armed Cursor Rule",
+        "body": "The link cursor animates on hover only, restarting from its resting frame, so a press never begins mid-beat and an idle page carries no cursor animation. Motion off keeps the drawn cursors and removes the stepping.",
+        "section": "components"
+      },
+      {
+        "name": "The Wall Clock Rule",
+        "body": "Every reading of the collector is a function of Date.now(), never of how long the tab has been open: the countdown and the gauge derive from the current UTC minute, so the hour turns over on screen. The interval pauses while the tab is hidden and recomputes on return.",
+        "section": "motion"
+      },
+      {
+        "name": "The Hourly Re-read Rule",
+        "body": "The index re-reads itself when its loaded rows belong to an hour that has ended: a handful of attempts just past the boundary, then nothing until the next hour. That refresh is background work, so it must not raise the Reading the index veil over a page the reader is already reading.",
+        "section": "motion"
+      },
+      {
+        "name": "The Held Masthead Rule",
+        "body": "The masthead is a named view-transition group, so a route change turns the sheet underneath it instead of fading the whole document out and back. Unnamed, a navigation looked like a full reload; the wordmark is now pixel-identical through the transition.",
+        "section": "motion"
+      },
+      {
+        "name": "The Steady Pointer Rule",
+        "body": "The pointer never changes shape because the page is mid-transition. A view transition makes the document root the hit target, so the shape is tracked on <html> and frozen while the transition runs, then re-read from the settled page.",
+        "section": "motion"
+      },
+      {
+        "name": "The Moved Figure Rule",
+        "body": "A number only animates when it changed. Replaying a count over figures the reader just read claims something happened, and a scrambling headline is the browser's own signal for a reload.",
+        "section": "motion"
+      },
+      {
         "name": "The Two Papers Rule",
         "body": "Panels are never white-on-white: they are paper on ground, so every block has an edge before a border is drawn.",
         "section": "colors"
@@ -335,6 +496,11 @@
       {
         "name": "The Living Rule",
         "body": "At least one element must be visibly changing, and it must report something true.",
+        "section": "motion"
+      },
+      {
+        "name": "The Printed Gauge Rule",
+        "body": "The cycle gauge uses transform: scaleX() rather than animated width, follows wall-clock elapsed time at one-second readings, and has a one-second linear transition independent of route entrance and exit.",
         "section": "motion"
       },
       {
