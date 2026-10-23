@@ -792,7 +792,7 @@ html[data-motion='on'] .pulse .dot {
 /* `backwards`, not `both`: a forwards-filling animation keeps applying its final transform, and
      an active animation outranks a transition on the same property — which silently killed the
      card's hover lift for the life of the page. */
-html[data-motion='on'] .cards[data-in] .card {
+html[data-motion='on'] .cards .card {
     animation: rise-in 460ms cubic-bezier(0.2, 0.9, 0.25, 1) 300ms backwards;
   }
 
@@ -884,25 +884,38 @@ html[data-motion='on'] .stamp {
 html[data-motion='on'] .poster h1 .hl {
     animation: ink-register 520ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
   }
-html[data-motion='on'].motion-ready [data-reveal] {
+/* Reveals belong to the page's arrival, not to scrolling.
+   They used to wait for an IntersectionObserver, so a section that had already been loaded animated
+   in again the first time it was scrolled to — the reader sees content they can already read fade in
+   and rise, which reads exactly like a second load. Everything marked [data-reveal] now plays once,
+   on the same 300ms beat as the page arrival, whether or not it is on screen at the time. */
+html[data-motion='on'] [data-reveal] {
+    animation: reveal-in 420ms cubic-bezier(0.16, 1, 0.3, 1) 300ms backwards;
+  }
+html[data-motion='on'] .brow::after {
+    transform-origin: left;
+    animation: rule-in 460ms cubic-bezier(0.16, 1, 0.3, 1) 400ms backwards;
+  }
+
+@keyframes reveal-in {
+  from {
     opacity: 0;
     transform: translateY(14px);
-    transition:
-      opacity 420ms cubic-bezier(0.16, 1, 0.3, 1),
-      transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-html[data-motion='on'].motion-ready [data-reveal][data-in] {
+  to {
     opacity: 1;
     transform: none;
   }
-html[data-motion='on'].motion-ready .brow::after {
+}
+
+@keyframes rule-in {
+  from {
     transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1) 100ms;
   }
-html[data-motion='on'].motion-ready .brow[data-in]::after {
+  to {
     transform: scaleX(1);
   }
+}
 
 
 
