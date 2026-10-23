@@ -36,14 +36,36 @@ function languageColour(name: string, ranked: ReadonlyArray<{ name: string }>): 
   return STACK_COLOURS[index % STACK_COLOURS.length]
 }
 
-function formatDate(value: string | null): string {
+function agoFrom(value: string | null, now: number): string {
   if (!value) return 'never'
   const date = new Date(value)
-  const minutes = Math.round((Date.now() - date.getTime()) / 60000)
+  const minutes = Math.round((now - date.getTime()) / 60000)
   if (minutes < 1) return 'just now'
   if (minutes < 60) return `${minutes} min ago`
   if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`
   return date.toISOString().slice(0, 10)
+}
+
+function formatDate(value: string | null): string {
+  return agoFrom(value, Date.now())
+}
+
+/**
+ * Re-renders the age of a timestamp every half minute, so the stamp keeps counting instead of
+ * freezing at whatever the server rendered. The first paint uses the same value the server sent,
+ * so hydration matches; the clock only starts after mount.
+ */
+function useTickingAgo(value: string | null): string {
+  const [now, setNow] = useState<number | null>(null)
+
+  useEffect(() => {
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 30000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  if (now === null) return formatDate(value)
+  return agoFrom(value, now)
 }
 
 /** Cards always print a calendar date; relative time is the panel's job. */
@@ -136,26 +158,6 @@ function useScrollReveal(): void {
   }, [])
 }
 
-/** A newsstand strip: the facts that change, scrolling past. Decorative duplicate of text below. */
-function Ticker({ facts }: { facts: string[] }) {
-  return (
-    <div className="ticker" aria-hidden="true">
-      <div className="ticker-track">
-        {[0, 1].map((copy) => (
-          <span className="ticker-run" key={copy}>
-            {facts.map((fact) => (
-              <span className="ticker-item" key={fact}>
-                {fact}
-                <i className="ticker-sep" />
-              </span>
-            ))}
-          </span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function Home() {
   const data = Route.useLoaderData()
   const isEmpty = data.ok && data.repositories.length === 0
@@ -170,6 +172,9 @@ function Home() {
   )
 
   const [language, setLanguage] = useState<string | null>(null)
+  /** Which slice of the language mix the pointer is on; drives the cross-highlight. */
+  const [focusedLanguage, setFocusedLanguage] = useState<string | null>(null)
+  const refreshedAgo = useTickingAgo(data.refreshedAt)
   const languages = useMemo(() => {
     const counts = new Map<string, number>()
     for (const repo of byCommits) {
@@ -188,20 +193,16 @@ function Home() {
   const cycle = useCycleCountdown(data.nextPassInMinutes)
   useScrollReveal()
 
-  // The hero already states the totals, so the strip carries only what the hero does not.
-  const tickerFacts = [
-    ...data.languages.slice(0, 5).map((entry) => `${entry.name} ${(entry.share * 100).toFixed(0)}%`),
-    'collected hourly',
-    'postgres → read-only api → cloudflare worker',
-  ]
-
   return (
     <main>
-      {data.ok && !isEmpty && <Ticker facts={tickerFacts} />}
-
       <div className="page-wrap">
         <section className="poster">
-          {data.ok && <div className="stamp">Refreshed {formatDate(data.refreshedAt)}</div>}
+          {data.ok && (
+            <div className="stamp">
+              Refreshed{' '}
+              <time dateTime={data.refreshedAt ?? undefined}>{refreshedAgo}</time>
+            </div>
+          )}
 
           <h1>
             {!data.ok && (
@@ -318,10 +319,11 @@ function Home() {
 
                 <div className="panel">
                   <h2>Language mix / bytes</h2>
-                  <div className="stack stack-live">
+                  <div className="stack stack-live" data-focus={focusedLanguage ? '' : undefined}>
                     {data.languages.map((entry, index) => (
                       <i
                         key={entry.name}
+                        data-on={focusedLanguage === entry.name ? '' : undefined}
                         style={{
                           width: `${Math.max(entry.share * 100, 0.5)}%`,
                           background: STACK_COLOURS[index % STACK_COLOURS.length],
@@ -331,6 +333,7 @@ function Home() {
                     ))}
                     {data.otherShare > 0.005 && (
                       <i
+                        data-on={focusedLanguage === 'Other' ? '' : undefined}
                         style={{
                           width: `${data.otherShare * 100}%`,
                           background: STACK_COLOURS[6],
@@ -339,9 +342,15 @@ function Home() {
                       />
                     )}
                   </div>
-                  <div className="legend">
+                  <div className="legend" data-focus={focusedLanguage ? '' : undefined}>
                     {data.languages.map((entry, index) => (
-                      <span key={entry.name}>
+                      // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only cross-highlight; every number is already written in the row, so nothing is lost without a pointer.
+                      <span
+                        key={entry.name}
+                        data-on={focusedLanguage === entry.name ? '' : undefined}
+                        onMouseEnter={() => setFocusedLanguage(entry.name)}
+                        onMouseLeave={() => setFocusedLanguage(null)}
+                      >
                         <i
                           className="sw"
                           style={{ background: STACK_COLOURS[index % STACK_COLOURS.length] }}
@@ -350,7 +359,12 @@ function Home() {
                       </span>
                     ))}
                     {data.otherShare > 0.005 && (
-                      <span>
+                      // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only cross-highlight; the row already states the share.
+                      <span
+                        data-on={focusedLanguage === 'Other' ? '' : undefined}
+                        onMouseEnter={() => setFocusedLanguage('Other')}
+                        onMouseLeave={() => setFocusedLanguage(null)}
+                      >
                         <i className="sw" style={{ background: STACK_COLOURS[6] }} />
                         Other {(data.otherShare * 100).toFixed(0)}%
                       </span>
@@ -407,7 +421,7 @@ function Home() {
 
                     return (
                       <article
-                        key={repo.repository_id}
+                        key={`${language ?? 'all'}:${repo.repository_id}`}
                         className="card rise"
                         style={{ animationDelay: `${Math.min(index, 11) * 45}ms` }}
                       >
@@ -421,7 +435,7 @@ function Home() {
                             rel="noopener noreferrer"
                             title={repo.full_name}
                           >
-                            {repo.full_name.split('/')[1]}
+                            <span className="card-title">{repo.full_name.split('/')[1]}</span>
                           </a>
                         </h3>
                         <p>{repo.description ?? 'No description on GitHub.'}</p>
