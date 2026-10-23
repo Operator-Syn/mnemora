@@ -393,6 +393,10 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
 
 .stack i:last-child {
   border-right: 0;
+  /* The remainder bucket absorbs every sub-pixel the other slices lose to rounding, so the bar
+     reaches the right edge at any width, zoom or device pixel ratio. */
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .legend {
