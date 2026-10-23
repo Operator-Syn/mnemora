@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
-import { useInView } from '../lib/reveal'
 import type { Repository } from '../lib/mnemora'
 
 export const Route = createFileRoute('/')({
@@ -202,11 +201,6 @@ function Home() {
     data.languages.reduce((sum, entry) => sum + entry.share, 0) + data.otherShare
   const otherTotal = data.otherShare + Math.max(0, 1 - accountedShare)
 
-  const ledgerBrow = useInView()
-  const ledgerGrid = useInView()
-  const reposBrow = useInView()
-  const cardsGrid = useInView()
-
   const repoCount = useCountUp(data.repositories.length)
   const commitCount = useCountUp(data.totalCommits)
   const cycle = useCycleCountdown(data.nextPassInMinutes)
@@ -306,16 +300,11 @@ function Home() {
 
           {data.ok && !isEmpty && (
             <>
-              <div className="brow" data-reveal ref={ledgerBrow.ref} data-in={ledgerBrow.inView ? '' : undefined}>
+              <div className="brow" data-reveal>
                 <span>01</span> The ledger
               </div>
 
-              <div
-                className="poster-grid"
-                data-reveal
-                ref={ledgerGrid.ref}
-                data-in={ledgerGrid.inView ? '' : undefined}
-              >
+              <div className="poster-grid" data-reveal>
                 <div className="panel">
                   <h2>By the numbers</h2>
                   <div className="kv">
@@ -399,7 +388,7 @@ function Home() {
                 </div>
               </div>
 
-              <div className="brow" data-reveal ref={reposBrow.ref} data-in={reposBrow.inView ? '' : undefined}>
+              <div className="brow" data-reveal>
                 <span>02</span> Public repositories
               </div>
 
@@ -433,7 +422,7 @@ function Home() {
                     {visible.length} of {byCommits.length} shown · most commits first
                   </span>
                 </div>
-                <div className="cards" data-deal ref={cardsGrid.ref} data-in={cardsGrid.inView ? '' : undefined}>
+                <div className="cards">
                   {visible.map((repo, index) => {
                     const langs = Object.entries(repo.languages_bytes ?? {})
                       .sort((a, b) => b[1] - a[1])
