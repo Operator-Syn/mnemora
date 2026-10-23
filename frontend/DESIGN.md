@@ -179,7 +179,7 @@ list, so add a row here before adding one there.
 | Body small | 15px, 1.5 | Public Sans | the "who runs it" lines |
 | Data | 14px, 1.4 | Plex Mono | key/value rows, tabular numerals |
 | Card body | 13.5px, 1.55 | Public Sans | descriptions, limit list items |
-| Note | 12.5px, 1.5 | Plex Mono | status row, legend, `n of m shown` |
+| Note | 12.5px, 1.5 | Plex Mono | status row, legend, cycle label, `n of m shown` |
 | Label | 11.5px, 0.12em | Plex Mono | chips, brows, ticker, timestamps, card feet |
 
 **The Numbers Rule.** Every number that a reader might compare is set in IBM Plex Mono with
@@ -271,23 +271,41 @@ on the active route. Hidden below 900px.
 
 ## Motion & Cadence
 
-The page must look like it is running. Motion here is evidence, not decoration: something is always
-either moving, counting, or counting down, and every one of those signals a real fact.
+**Thesis: the press run.** The world is printed, so the motion is printing. Nothing fades softly or
+bounces; things are pressed, registered, and counted, and every one of them reports a real fact.
 
-- **Entrance:** cards rise 10px and fade over 460ms, staggered 45ms each, first 12 only. Runs once.
-- **Count-up:** the two headline figures count from zero over 900ms on first paint.
-- **Bars:** language segments grow from their left edge, staggered 90ms.
-- **Ticker:** 48s linear loop, paused on hover/focus.
-- **Pulse:** the collector dot breathes on a 2.4s cycle.
-- **Hover:** cards lift 2px-left/-2px-up with the shadow turning cobalt; the card's language bar
-  goes from 50% to full opacity; chips lift 1px.
+**Focal moment — the stamp press.** On load the refresh stamp arrives from -9° and 1.22 scale with a
+16px shadow, and settles to -2.5° with a 5px shadow over 540ms. It is the one authored entrance; the
+rest of the page is quiet by comparison.
 
-**The Living Rule.** At least one element on the page must be visibly changing, and it must be
-reporting something true — a timestamp, a countdown, a count. Motion that reports nothing is noise.
+**Supporting motion, each with a job:**
 
-**The Quiet Fallback Rule.** `prefers-reduced-motion: reduce` removes every animation and transition
-on these elements, and the counts land on their final value immediately. The information survives;
-only the movement goes.
+- **Ink registration** — the highlight blocks wipe in left to right (`clip-path: inset(0 100% 0 0)` →
+  `inset(0)`), 520ms, offset 40ms and 150ms, like ink laid on a sheet.
+- **The cycle gauge** — a printed rule under the status row whose fill is the fraction of the hour
+  elapsed. It advances every 15s and is a progress bar to assistive tech. This is the page's
+  continuous movement, and it is measuring the actual collection cycle.
+- **Live countdown** — `NEXT PASS IN n MIN` decrements locally from the server-rendered value.
+- **Section rules** — brows draw their hairline across on first view (460ms, 100ms delay).
+- **Card entrance** — 10px rise with 45ms stagger, first 12 only, once per load.
+- **Bars** — language segments grow from the left edge, 90ms stagger.
+- **Feedback** — chips compress to 0.97 on :active; cards lift 2px with the shadow turning cobalt;
+  the card language bar goes from 50% to full opacity.
+
+**The Living Rule.** At least one element must be visibly changing, and it must be reporting something
+true — the cycle gauge, the countdown, the pulse. Motion that reports nothing is noise.
+
+**The Quiet Fallback Rule.** `prefers-reduced-motion: reduce` removes every animation (measured: 47
+animations at rest, 0 under reduce) while the counts, the gauge, and the countdown keep their values.
+Content is never hidden behind motion: reveal targets start visible and only animate once JavaScript
+adds `motion-ready`.
+
+**The One Line Rule.** The masthead is one row at every width. The `collected hourly` chip is the first
+thing to drop (≤760px), then the nav (≤900px); the wordmark steps down to 22px and 19px. No header
+control may wrap to a second line.
+
+**The Printed Gauge Rule.** Never animate `width` for the cycle; it is a `transform: scaleX()` on an
+inner element so the paint stays cheap.
 
 ## Do's and Don'ts
 

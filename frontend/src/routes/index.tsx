@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
 import type { Repository, RepositoryIndex } from '../lib/mnemora'
@@ -68,6 +69,58 @@ function useCountUp(target: number, duration = 900): number {
   return value
 }
 
+/** Counts the minutes down locally after the server-rendered value, so the page keeps moving. */
+function useCycleCountdown(initialMinutes: number): { minutesLeft: number; progress: number } {
+  const [minutesLeft, setMinutesLeft] = useState(initialMinutes)
+
+  useEffect(() => {
+    const startedAt = Date.now()
+    const update = () => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 60000)
+      setMinutesLeft(Math.max(0, initialMinutes - elapsed))
+    }
+    update()
+    const timer = window.setInterval(update, 15000)
+    return () => window.clearInterval(timer)
+  }, [initialMinutes])
+
+  return { minutesLeft, progress: Math.min(1, Math.max(0, (60 - minutesLeft) / 60)) }
+}
+
+/**
+ * Reveals marked blocks as they enter the viewport. The `motion-ready` class is added by this
+ * effect, so a page that never runs JavaScript keeps every element visible.
+ */
+function useScrollReveal(): void {
+  useEffect(() => {
+    const root = document.documentElement
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
+    if (nodes.length === 0) return
+
+    if (!('IntersectionObserver' in window)) {
+      for (const node of nodes) node.dataset.in = ''
+      return
+    }
+
+    root.classList.add('motion-ready')
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          ;(entry.target as HTMLElement).dataset.in = ''
+          observer.unobserve(entry.target)
+        }
+      },
+      { rootMargin: '0px 0px -10% 0px', threshold: 0.12 },
+    )
+    for (const node of nodes) observer.observe(node)
+    return () => {
+      observer.disconnect()
+      root.classList.remove('motion-ready')
+    }
+  }, [])
+}
+
 /** A newsstand strip: the facts that change, scrolling past. Decorative duplicate of text below. */
 function Ticker({ facts }: { facts: string[] }) {
   return (
@@ -117,6 +170,8 @@ function Home() {
 
   const repoCount = useCountUp(data.repositories.length)
   const commitCount = useCountUp(data.totalCommits)
+  const cycle = useCycleCountdown(data.nextPassInMinutes)
+  useScrollReveal()
 
   // The hero already states the totals, so the strip carries only what the hero does not.
   const tickerFacts = [
@@ -146,8 +201,14 @@ function Home() {
             )}
             {data.ok && !isEmpty && (
               <>
-                <span className="hl">{repoCount}</span> repositories,{' '}
-                <span className="hl alt">{commitCount.toLocaleString()}</span> commits.
+                <span className="hl" style={{ animationDelay: '40ms' }}>
+                  {repoCount}
+                </span>{' '}
+                repositories,{' '}
+                <span className="hl alt" style={{ animationDelay: '150ms' }}>
+                  {commitCount.toLocaleString()}
+                </span>{' '}
+                commits.
               </>
             )}
           </h1>
@@ -158,15 +219,33 @@ function Home() {
           </p>
 
           {data.ok && !isEmpty && (
-            <div className="status-row">
-              <span className="pulse">
-                <i className="dot" /> Collector active
-              </span>
-              <span className="status-sep" />
-              <span>Next pass in {data.nextPassInMinutes} min</span>
-              <span className="status-sep" />
-              <span>{data.repositories.length} repos · {data.languageCount} languages tracked</span>
-            </div>
+            <>
+              <div className="status-row">
+                <span className="pulse">
+                  <i className="dot" /> Collector active
+                </span>
+                <span className="status-sep" />
+                <span>Next pass in {cycle.minutesLeft} min</span>
+                <span className="status-sep" />
+                <span>
+                  {data.repositories.length} repos · {data.languageCount} languages tracked
+                </span>
+              </div>
+              <div className="cycle-label" aria-hidden="true">
+                <span>Cycle</span>
+                <span>{Math.round(cycle.progress * 100)}% through this hour</span>
+              </div>
+              <div
+                className="cycle"
+                role="progressbar"
+                aria-label="Progress through the current collection hour"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(cycle.progress * 100)}
+              >
+                <i style={{ '--progress': cycle.progress } as CSSProperties} />
+              </div>
+            </>
           )}
 
           {!data.ok && (
@@ -193,11 +272,11 @@ function Home() {
 
           {data.ok && !isEmpty && (
             <>
-              <div className="brow">
+              <div className="brow" data-reveal>
                 <span>01</span> The ledger
               </div>
 
-              <div className="poster-grid">
+              <div className="poster-grid" data-reveal>
                 <div className="panel">
                   <h2>By the numbers</h2>
                   <div className="kv">
@@ -270,11 +349,12 @@ function Home() {
                 </div>
               </div>
 
-              <div className="brow">
+              <div className="brow" data-reveal>
                 <span>02</span> Public repositories
               </div>
 
-              <div className="filters" role="group" aria-label="Filter repositories by language">
+              <fieldset className="filters">
+                <legend className="visually-hidden">Filter repositories by leading language</legend>
                 <button
                   type="button"
                   className="chip"
@@ -294,7 +374,7 @@ function Home() {
                     {name} <b>{count}</b>
                   </button>
                 ))}
-              </div>
+              </fieldset>
 
               <section className="repos">
                 <div className="repos-head">

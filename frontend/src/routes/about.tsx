@@ -58,7 +58,11 @@ function About() {
     <main className="page-wrap">
       <section className="poster">
         <h1>
-          How this <span className="hl">page</span> is built.
+          How this{' '}
+          <span className="hl" style={{ animationDelay: '40ms' }}>
+            page
+          </span>{' '}
+          is built.
         </h1>
 
         <p className="lede">
@@ -67,11 +71,11 @@ function About() {
           The numbers on the other page are rows in that database.
         </p>
 
-        <div className="brow">
+        <div className="brow" data-reveal>
           <span>01</span> What is in the store
         </div>
 
-        <div className="about-top">
+        <div className="about-top" data-reveal>
           {hasNumbers && (
             <div className="panel about-counts">
               <h2>What is in the store right now</h2>
@@ -124,7 +128,7 @@ function About() {
           </div>
         </div>
 
-        <div className="brow">
+        <div className="brow" data-reveal>
           <span>02</span> The pipeline
         </div>
 
@@ -132,7 +136,7 @@ function About() {
           Collect <i /> Store <i /> Serve <i /> Render
         </div>
 
-        <section className="steps" aria-label="The pipeline">
+        <section className="steps" aria-label="The pipeline" data-reveal>
           {STEPS.map((step, index) => (
             <article className="step" key={step.title}>
               <span className="step-num">{String(index + 1).padStart(2, '0')}</span>
@@ -142,11 +146,11 @@ function About() {
           ))}
         </section>
 
-        <div className="brow">
+        <div className="brow" data-reveal>
           <span>03</span> Limits
         </div>
 
-        <div className="panel limits">
+        <div className="panel limits" data-reveal>
           <h2>What it will not claim</h2>
           <ul>
             {LIMITS.map((limit) => (
