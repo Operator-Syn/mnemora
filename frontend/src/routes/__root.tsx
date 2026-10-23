@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+import { HeadContent, Link, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import Footer from '../components/Footer'
@@ -30,7 +30,34 @@ export const Route = createRootRoute({
     ],
   }),
   shellComponent: RootDocument,
+  notFoundComponent: NotFound,
 })
+
+/**
+ * Without this, TanStack Router falls back to `<p>Not Found</p>` on the bare page — no header, no
+ * paper, nothing that belongs to this world. Every unmatched route now lands in the poster.
+ */
+function NotFound() {
+  return (
+    <main>
+      <div className="page-wrap">
+        <section className="poster notfound">
+          <div className="stamp">Filed under: missing</div>
+          <h1>
+            <span className="hl alt">404</span> Nothing filed at this address.
+          </h1>
+          <p className="lede">
+            The page you asked for was never collected, or it has been renamed since. Nothing was
+            deleted from the index to make room for it.
+          </p>
+          <Link to="/" className="cta">
+            Open the ledger
+          </Link>
+        </section>
+      </div>
+    </main>
+  )
+}
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
