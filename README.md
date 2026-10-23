@@ -11,13 +11,18 @@ Mnemora is a proposed GitHub activity and repository-access project. Its dashboa
 
 ## What exists today
 
-A working collection pipeline, not a product:
+A working collection pipeline and a read-only dashboard, not a product:
 
 - `compose.yaml` runs a self-hosted n8n (queue mode), PostgreSQL 18 and Redis, bound to loopback.
 - `workflows/collect-010-github-public-cache/` discovers **every public repository** of a configured account and caches its full commit history as one JSON file per repository, refreshing only what changed.
 - `scripts/workflows.sh` imports workflows from this repository into n8n, runs them on demand, and exports edits back.
+- `frontend/` is a TanStack Start dashboard (Cloudflare Workers) that reads that cached data through a server function, so the API key never reaches the browser. It runs locally; nothing is deployed.
 
-Still absent: the dashboard that reads the cache, any private-repository path, payments, and any deployment beyond a local machine. See [product overview](docs/product/overview.md) for scope and open decisions.
+Still absent: any private-repository path, payments, and any deployment beyond a local machine. See [product overview](docs/product/overview.md) for scope and open decisions.
+
+## Repository layout
+
+[`AGENTS.md`](AGENTS.md) holds the ownership map — which directory owns what, the shared conventions, and where each stack's own instructions live. Read it before adding a file to an unfamiliar directory.
 
 ## Documentation
 
