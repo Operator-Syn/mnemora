@@ -7,6 +7,10 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
+    // Continuity between pages, using the platform View Transitions API rather than a motion
+    // library. The animation itself is gated on html[data-motion='on'] in styles.css, so a visitor
+    // who stopped motion gets an instant swap.
+    defaultViewTransition: true,
   })
 
   return router
