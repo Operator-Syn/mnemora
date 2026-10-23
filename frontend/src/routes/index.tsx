@@ -100,12 +100,29 @@ function Tally({ value, final }: { value: number; final: number }) {
   )
 }
 
-/** Counts a figure up on first paint. Reduced motion lands on the value immediately. */
+/**
+ * True once a route has mounted in this document. The first mount was served: its figures came down
+ * in the HTML already final. Only later mounts — client navigations — have a figure worth counting.
+ */
+let countedOnce = false
+
+/**
+ * Counts a figure up when the number arrives client-side.
+ *
+ * On a server-rendered load the HTML already says `25 repositories`, so counting from zero made the
+ * figure jump backwards before climbing: a refresh flashed "2 repositories" over a page that had
+ * just said 25. A served figure stays put; a navigated-to figure counts.
+ */
 function useCountUp(target: number, duration = 900): number {
   const [value, setValue] = useState(target)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    if (!countedOnce) {
+      countedOnce = true
+      setValue(target)
+      return
+    }
     // The page's motion switch, not the raw media query: a visitor who allowed motion gets the
     // count even if their desktop asks for reduced motion, and one who stopped it never sees it.
     if (document.documentElement.dataset.motion !== 'on') {
