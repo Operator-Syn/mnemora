@@ -346,6 +346,19 @@ bytes belong to nothing.
 keeps applying its final transform, and an active animation outranks a transition on the same
 property — which silently disables every hover transform on the element for the life of the page.
 
+**The One Arrival Rule.** A page arrives the same way whether you navigated to it or reloaded it.
+Navigation gets that from the view transition (`page-lift` out, `page-register` in); a refresh has no
+old page to lift, so `<main>` runs `page-register` itself. Every entrance inside then waits 300ms —
+the transition's own duration — before it starts, so both paths share one beat:
+
+| t | navigation | refresh |
+|---|---|---|
+| 0–300ms | old page lifts, new page registers | main registers |
+| 300–840ms | stamp, ink, cards, stack print | stamp, ink, cards, stack print |
+
+Before this, a refresh jumped straight into the element entrances while a navigation hid their first
+300ms behind the transition — measured: 9 animations on load, 1 on navigation.
+
 **Focal moment, second pass — the page arriving.** Route changes go through the platform View
 Transitions API (`defaultViewTransition` on the router; no motion library). The outgoing sheet lifts
 8px and fades in 180ms, the incoming one registers 10px down over 300ms. Exits are faster than
