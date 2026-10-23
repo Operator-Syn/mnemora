@@ -1288,6 +1288,138 @@ html[data-motion='on'] .cta {
     box-shadow 120ms ease;
 }
 
+
+/* Route pending veil: the skeleton covers the page, so the outgoing route keeps its DOM (and the
+   view transition still snapshots it) while the next one loads. */
+.pending-veil {
+  position: fixed;
+  inset: 57px 0 0;
+  z-index: 9;
+  background: var(--ground);
+  overflow-y: auto;
+}
+
+@media (max-width: 760px) {
+  .pending-veil {
+    inset-block-start: 47px;
+  }
+}
+
+/* Route pending -------------------------------------------------------------
+   A skeleton is a printed proof: empty blocks with rules, no shimmer. Every
+   element here is structure, never invented content, and the label states what
+   is actually happening.
+   --------------------------------------------------------------------------- */
+
+.pending {
+  padding: 58px 0 34px;
+}
+
+.pending-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 26px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.pending-mark {
+  width: 8px;
+  height: 8px;
+  background: var(--ink-soft);
+}
+
+.pending-rail {
+  height: 6px;
+  margin: 0 0 34px;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  overflow: hidden;
+}
+
+.pending-rail i {
+  display: block;
+  height: 100%;
+  width: 34%;
+  background: var(--ink);
+}
+
+html[data-motion='on'] .pending-rail i {
+  animation: rail-sweep 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes rail-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+.pending-title {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.pending-title i {
+  display: block;
+  height: clamp(30px, 4.4vw, 62px);
+  background: color-mix(in srgb, var(--ink) 14%, var(--paper));
+  border: var(--rule-2);
+}
+
+.pending-lede {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 34px;
+  max-width: 56ch;
+}
+
+.pending-lede i {
+  display: block;
+  height: 12px;
+  background: color-mix(in srgb, var(--ink) 10%, var(--paper));
+}
+
+.pending-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.pending-card {
+  border: var(--rule);
+  background: var(--paper);
+  box-shadow: 6px 6px 0 var(--shadow-solid);
+  padding: 18px 16px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 132px;
+}
+
+.pending-card i {
+  display: block;
+  height: 10px;
+  background: color-mix(in srgb, var(--ink) 12%, var(--paper));
+}
+
+.pending-card i:first-child {
+  height: 18px;
+  background: color-mix(in srgb, var(--ink) 16%, var(--paper));
+}
+
+@media (max-width: 900px) {
+  .pending-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Route transitions ---------------------------------------------------------
    The platform API does the work (router: defaultViewTransition); this is only the
    vocabulary. Pages are printed sheets: the outgoing one lifts away, the incoming
