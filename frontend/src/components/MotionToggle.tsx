@@ -76,7 +76,7 @@ export default function MotionToggle() {
       type="button"
       onClick={cycleMode}
       aria-label={`Motion: ${DESCRIPTIONS[mode]}`}
-      title={DESCRIPTIONS[mode]}
+      data-tip={DESCRIPTIONS[mode]}
       className="theme-toggle motion-toggle"
     >
       {/* All three labels ship in the HTML and CSS shows the one matching html[data-motion-mode],
