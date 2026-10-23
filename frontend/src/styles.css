@@ -113,6 +113,149 @@ a {
   color: var(--cream);
 }
 
+/* Pointer ----------------------------------------------------------------------
+   The pointer is drawn, not borrowed: 24px cursors cut to this palette, so the one
+   part of the page no stylesheet otherwise owns still belongs to the printed world.
+
+   An animated image cannot carry this. Every engine paints the first frame of a GIF
+   in `cursor` and stops there, so the animated sets are stepped frame by frame with
+   a keyframed `cursor` value, which does switch — verified in-browser before use.
+   Hotspots are read from each frame's own alpha channel rather than guessed:
+   arrow tip 2 1, fingertip 8 4, I-beam stem 12 12, busy rings 12 12.
+
+   Only actions this site has get a cursor. A grab, zoom, resize, help or copy pointer
+   over a control that cannot grab, zoom or copy would claim an interaction that is
+   not there, so those frames stay in the pack, unused.
+   --------------------------------------------------------------------------- */
+
+:root {
+  --cursor-default: url('/cursors/default.png') 2 1;
+  --cursor-text: url('/cursors/text.png') 12 12;
+  --cursor-link: url('/cursors/animated/pointer/frame_00.png') 8 4;
+  --cursor-busy: url('/cursors/animated/wait/frame_00.png') 12 12;
+  --cursor-working: url('/cursors/animated/progress/frame_00.png') 2 1;
+}
+
+html {
+  cursor: var(--cursor-default), default;
+}
+
+/* Prose that carries no action reads as selectable text. */
+:is(p, li, dt, dd, pre, code, blockquote) {
+  cursor: var(--cursor-text), text;
+}
+
+a,
+button,
+summary {
+  cursor: var(--cursor-link), pointer;
+}
+
+/* A card is one link: nothing inside it may advertise selection instead. Placed after
+   the text rule so it wins the tie at equal specificity. */
+a *,
+button *,
+summary * {
+  cursor: inherit;
+}
+
+/* The veil blocks the page, so the cursor says the reader has to wait. */
+.pending-veil,
+.pending-veil * {
+  cursor: var(--cursor-busy), wait;
+}
+
+/* The shape follows the control the pointer is really over, tracked on <html> from real pointer
+   events. A view transition makes the document root the hit target for its whole duration, so the
+   root has to be able to carry the hand too — otherwise the pointer drops back to the default arrow
+   the moment a navigation starts and picks the hand up again when it settles. */
+html[data-pointer='link'] {
+  cursor: var(--cursor-link), pointer;
+}
+
+html[data-motion='on'][data-pointer='link'] {
+  animation: cursor-link-step 840ms steps(1, end) infinite;
+}
+
+/* Two authored frames: a 700ms resting hand, then a 140ms pressed fingertip. */
+@keyframes cursor-link-step {
+  0% {
+    cursor: url('/cursors/animated/pointer/frame_00.png') 8 4, pointer;
+  }
+  83.333% {
+    cursor: url('/cursors/animated/pointer/frame_01.png') 8 4, pointer;
+  }
+}
+
+/* Eight 125ms frames: one turn of the ring per second. */
+@keyframes cursor-wait-step {
+  0% {
+    cursor: url('/cursors/animated/wait/frame_00.png') 12 12, wait;
+  }
+  12.5% {
+    cursor: url('/cursors/animated/wait/frame_01.png') 12 12, wait;
+  }
+  25% {
+    cursor: url('/cursors/animated/wait/frame_02.png') 12 12, wait;
+  }
+  37.5% {
+    cursor: url('/cursors/animated/wait/frame_03.png') 12 12, wait;
+  }
+  50% {
+    cursor: url('/cursors/animated/wait/frame_04.png') 12 12, wait;
+  }
+  62.5% {
+    cursor: url('/cursors/animated/wait/frame_05.png') 12 12, wait;
+  }
+  75% {
+    cursor: url('/cursors/animated/wait/frame_06.png') 12 12, wait;
+  }
+  87.5% {
+    cursor: url('/cursors/animated/wait/frame_07.png') 12 12, wait;
+  }
+}
+
+/* The same eight-frame cadence, for work running in the background. */
+@keyframes cursor-working-step {
+  0% {
+    cursor: url('/cursors/animated/progress/frame_00.png') 2 1, progress;
+  }
+  12.5% {
+    cursor: url('/cursors/animated/progress/frame_01.png') 2 1, progress;
+  }
+  25% {
+    cursor: url('/cursors/animated/progress/frame_02.png') 2 1, progress;
+  }
+  37.5% {
+    cursor: url('/cursors/animated/progress/frame_03.png') 2 1, progress;
+  }
+  50% {
+    cursor: url('/cursors/animated/progress/frame_04.png') 2 1, progress;
+  }
+  62.5% {
+    cursor: url('/cursors/animated/progress/frame_05.png') 2 1, progress;
+  }
+  75% {
+    cursor: url('/cursors/animated/progress/frame_06.png') 2 1, progress;
+  }
+  87.5% {
+    cursor: url('/cursors/animated/progress/frame_07.png') 2 1, progress;
+  }
+}
+
+/* The animation is armed by hover, not left running on every link: it restarts from
+   the resting frame each time the pointer arrives, so a press is never caught
+   mid-beat, and an idle page carries no cursor work at all. */
+html[data-motion='on'] a:hover,
+html[data-motion='on'] button:hover:not(:disabled),
+html[data-motion='on'] summary:hover {
+  animation: cursor-link-step 840ms steps(1, end) infinite;
+}
+
+html[data-motion='on'] .pending-veil {
+  animation: cursor-wait-step 1s steps(1, end) infinite;
+}
+
 .page-wrap {
   width: min(1180px, calc(100% - 2.5rem));
   margin-inline: auto;
@@ -223,7 +366,6 @@ a {
   color: var(--ink);
   border: var(--rule-2);
   padding: 5px 9px;
-  cursor: pointer;
 }
 
 /* One label per mode ships in the HTML; html[data-theme-mode] / html[data-motion-mode] decide
@@ -464,15 +606,91 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
   padding: 16px 15px 12px;
   box-shadow: 6px 6px 0 var(--shadow-solid);
   position: relative;
+  isolation: isolate;
   /* A column, so the bar and the foot line sit at the same height in every card
      regardless of how long the name or the description runs. */
   display: flex;
   flex-direction: column;
 }
 
-.card:hover {
+/* A brief cobalt registration stroke reads the commit-ranked cards as one printed ledger. */
+.card::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: -3px;
+  left: -3px;
+  width: calc(100% + 6px);
+  height: 5px;
+  background: var(--cobalt);
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* An independent paper registration tab keeps a quiet, short cadence between ordered ledger passes. */
+.card::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  left: -8px;
+  bottom: 10px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--ink);
+  background: var(--sun);
+  box-shadow: 2px 2px 0 var(--shadow-solid);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.card-register {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  overflow: visible;
+  fill: none;
+  stroke: var(--tomato);
+  stroke-width: 2px;
+  stroke-linecap: square;
+  vector-effect: non-scaling-stroke;
+  transform: scale(0.94);
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.card-detail-link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+
+.card-detail-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.card-detail-link > :not(.card-tag) {
+  position: relative;
+  z-index: 1;
+}
+
+.card:hover,
+.card:focus-within {
   transform: translate(-2px, -2px);
   box-shadow: 9px 9px 0 var(--cobalt);
+  outline: 3px solid var(--cobalt);
+  outline-offset: 2px;
 }
 
 .card-tag {
@@ -487,6 +705,8 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
   border: var(--rule-2);
   box-shadow: 3px 3px 0 var(--shadow-solid);
   text-transform: uppercase;
+  /* The commit count is foreground information; the moving ledger stroke must pass behind it. */
+  z-index: 4;
 }
 
 .card h3 {
@@ -495,38 +715,55 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
   margin: 8px 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.01em;
-  /* 1.08 line-height plus a 3px border-bottom on the inline link is what made the
-     underline of one line print across the next. Text decoration respects the line
-     box; two lines is enough for the longest real repository name. */
   line-height: 1.2;
-  /* A fixed two-line slot, not a minimum: the card keeps its size whether the name runs one line
-     or two. The text block is centred inside that slot, so the rule sits directly under the words
-     at any length instead of floating a line below a short name. */
+  /* Keep a fixed two-line slot; the text and external-link mark share its width without changing
+     card geometry or letting long names run under the action cue. */
   height: calc(2.4em + 3px);
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   overflow: hidden;
   overflow-wrap: anywhere;
+  position: relative;
+  z-index: 2;
 }
 
-/* The rule belongs to the card, not to the text: a text underline changes with the name's length
-   and disappears when the clamp cuts a line, which is exactly the inconsistency on screen. It is
-   drawn under the anchor rather than under the fixed slot, so it tracks the last line of whatever
-   the name turns out to be. */
-.card h3 a {
-  display: block;
-  width: 100%;
-  color: var(--ink);
+.card-title-link {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
   text-decoration: none;
 }
 
-.card h3 a::after {
+.card-title-wrap {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+/* The rule tracks the last line, while the external-link mark makes the card's action visible
+   without adding instructions or relying on hover text. */
+.card-title-wrap::after {
   content: '';
   display: block;
   height: 3px;
   background: var(--sun);
   transform-origin: left center;
+}
+
+.card-link-mark {
+  display: block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
 }
 
 .card-title {
@@ -536,9 +773,15 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
   overflow: hidden;
 }
 
-.card h3 a:hover {
+.card-title-link:hover .card-title-wrap,
+.card-title-link:focus-visible .card-title-wrap {
   background: var(--ink);
   color: var(--paper);
+}
+
+.card-title-link:hover .card-link-mark,
+.card-title-link:focus-visible .card-link-mark {
+  color: var(--cobalt);
 }
 
 .card p {
@@ -563,6 +806,291 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
   font-size: 12px;
   border-top: var(--rule-2);
   padding-top: 8px;
+}
+
+/* Repository detail -------------------------------------------------------- */
+
+.repo-page {
+  padding-top: 38px;
+  padding-bottom: 36px;
+}
+
+.repo-back {
+  display: inline-flex;
+  margin-bottom: 28px;
+  padding: 3px 0;
+  border-bottom: 3px solid var(--sun);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.repo-back:hover {
+  background: var(--sun);
+  color: var(--on-accent);
+}
+
+.repo-heading {
+  padding-bottom: 24px;
+  border-bottom: var(--rule);
+}
+
+.repo-title {
+  max-width: 100%;
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-size: clamp(36px, 6vw, 64px);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.repo-title-owner {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.42em;
+  letter-spacing: 0;
+}
+
+.repo-title-name {
+  background: var(--sun);
+  color: var(--on-accent);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  padding: 0 0.06em;
+}
+
+.repo-title[data-long-name='true'] {
+  font-size: clamp(38px, 4.4vw, 48px);
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.repo-title[data-long-name='true'] .repo-title-owner {
+  display: block;
+  margin-bottom: 0.24em;
+  font-size: 0.34em;
+  line-height: 1.3;
+}
+
+.repo-title[data-long-name='true'] .repo-title-name {
+  display: block;
+  max-width: 900px;
+}
+
+.repo-description {
+  max-width: 66ch;
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.repo-history-status,
+.repo-branch {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.repo-branch {
+  margin-top: 4px;
+}
+
+.commit-section {
+  margin-top: 28px;
+}
+
+.commit-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.commit-heading h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.commit-heading p,
+.commit-progress,
+.commit-end {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.commit-progress {
+  margin-bottom: 8px;
+}
+
+.commit-list {
+  margin: 0;
+  padding: 0;
+  border-top: var(--rule-2);
+  list-style: none;
+}
+
+.commit-row {
+  display: grid;
+  gap: 8px;
+  padding: 13px 0;
+  border-bottom: var(--rule-2);
+}
+
+.commit-subject {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.commit-message-details {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.commit-message-details summary {
+  width: fit-content;
+  color: var(--cobalt);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.commit-message-details pre {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.commit-sha {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.commit-sha svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.commit-message-details summary:focus-visible,
+.commit-sha:focus-visible,
+.repo-back:focus-visible {
+  outline: 3px solid var(--cobalt);
+  outline-offset: 3px;
+}
+
+.commit-pagination {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 18px;
+}
+
+.commit-load-button {
+  min-height: 42px;
+  padding: 8px 13px;
+  border: var(--rule);
+  background: var(--paper);
+  box-shadow: 4px 4px 0 var(--shadow-solid);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.commit-load-button:hover:not(:disabled) {
+  background: var(--sun);
+  color: var(--on-accent);
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--shadow-solid);
+}
+
+.commit-load-button:focus-visible {
+  outline: 3px solid var(--cobalt);
+  outline-offset: 3px;
+}
+
+.commit-load-button:disabled {
+  /* Still usable elsewhere, so this is the background-busy arrow, not the blocked page. */
+  cursor: var(--cursor-working), progress;
+  opacity: 0.7;
+}
+
+html[data-motion='on'] .commit-load-button:disabled {
+  animation: cursor-working-step 1s steps(1, end) infinite;
+}
+
+.commit-load-error {
+  margin: 14px 0 0;
+  color: var(--tomato);
+  font-weight: 700;
+}
+
+.commit-end,
+.commit-empty {
+  margin-top: 16px;
+}
+
+.repo-state {
+  margin-top: 32px;
+  padding: 20px;
+  border: var(--rule);
+  background: var(--paper);
+  box-shadow: 8px 8px 0 var(--shadow-solid);
+}
+
+.repo-state h1 {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.1;
+}
+
+.repo-state p {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  line-height: 1.5;
 }
 
 /* Failure / empty states ---------------------------------------------------- */
@@ -739,7 +1267,6 @@ html[data-motion='on'] .pulse .dot {
   color: var(--ink);
   border: var(--rule-2);
   padding: 5px 9px;
-  cursor: pointer;
 }
 
 .chip b {
@@ -835,7 +1362,6 @@ html[data-motion='on'] .stack-live {
   font: inherit;
   color: var(--ink);
   border-bottom: 3px solid var(--sun);
-  cursor: pointer;
 }
 
 .repos-empty {
@@ -867,8 +1393,8 @@ html[data-motion='on'] .stack-live {
    The world is printed, so the motion is printing: the stamp presses in, the
    highlight blocks register left to right like ink laid on a sheet, section
    rules draw across the page, and the collection cycle advances as a printed
-   gauge. Continuous movement is the cycle itself — nothing decorative loops.
-   Every block below is gated on a motion preference.
+   gauge. A moving registration hatch shows the live clock without changing the
+   measured value. Every block below is gated on a motion preference.
    --------------------------------------------------------------------------- */
 
 html[data-motion='on'] main {
@@ -946,19 +1472,54 @@ html[data-motion='on'] .brow::after {
 /* The collection cycle as a printed gauge: how far through the hour we are. */
 .cycle {
   position: relative;
-  height: 6px;
+  height: 12px;
   margin: 0 0 30px;
-  background: color-mix(in srgb, var(--ink) 16%, transparent);
-  border: 0;
+  background: var(--paper);
+  border: 2px solid var(--ink);
   overflow: hidden;
 }
 
+.cycle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 14px, var(--ink) 14px 16px);
+  opacity: 0.18;
+}
+
 .cycle i {
+  position: relative;
   display: block;
   height: 100%;
-  background: var(--ink);
+  background: var(--cobalt);
   transform-origin: left;
   transform: scaleX(var(--progress, 0));
+  overflow: hidden;
+}
+
+.cycle i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 12px,
+    color-mix(in srgb, var(--paper) 72%, transparent) 12px 16px,
+    transparent 16px 28px
+  );
+}
+
+.cycle b {
+  position: absolute;
+  z-index: 1;
+  top: -1px;
+  bottom: -1px;
+  left: calc(var(--progress, 0) * 100%);
+  width: 6px;
+  background: var(--sun);
+  border-inline: 2px solid var(--ink);
+  transform: translateX(-50%);
 }
 
 .cycle-label {
@@ -1199,14 +1760,46 @@ html[data-motion='on'] .brow::after {
    overridden by the Motion control in the masthead.
    --------------------------------------------------------------------------- */
 
-html[data-motion='on'] .card h3 a::after {
-    transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
-  }
-/* The rule redraws under the name on hover and on keyboard focus. */
-html[data-motion='on'] .card:hover h3 a::after,
-html[data-motion='on'] .card:focus-within h3 a::after {
-    animation: rule-draw 300ms cubic-bezier(0.16, 1, 0.3, 1);
-  }
+html[data-motion='on'] .card::before {
+  animation: card-ledger-register 8s linear infinite;
+  animation-delay: calc(1400ms + var(--card-wave-delay, 0ms));
+}
+html[data-motion='on'] .card::after {
+  animation: card-index-tab 3.2s infinite;
+  animation-delay: var(--card-tab-phase, 0ms);
+}
+/* Keep this print registration on its own period and phase, separate from the cobalt rank pass. */
+html[data-motion='on'] .card-register {
+  animation: card-corner-register 5.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation-delay: var(--card-register-phase, 0ms);
+}
+html[data-motion='on'] .card-tag {
+  animation: card-badge-press 8s linear infinite;
+  animation-delay: calc(1400ms + var(--card-wave-delay, 0ms));
+}
+html[data-motion='on'] .card-title-link .card-link-mark {
+  animation: card-link-nudge 8s linear infinite;
+  animation-delay: calc(1400ms + var(--card-wave-delay, 0ms));
+}
+html[data-motion='on'] .card-title-wrap::after {
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: card-title-reprint 4.8s ease-in-out infinite;
+  animation-delay: var(--card-reprint-phase, 0ms);
+}
+/* The title rule registers and the external-link mark shifts on pointer hover or keyboard focus. */
+html[data-motion='on'] .card:hover .card-title-wrap::after,
+html[data-motion='on'] .card:focus-within .card-title-wrap::after {
+  animation: rule-draw 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+html[data-motion='on'] .card-link-mark {
+  transition:
+    color 140ms ease,
+    transform 140ms ease;
+}
+html[data-motion='on'] .card-title-link:hover .card-link-mark,
+html[data-motion='on'] .card-title-link:focus-visible .card-link-mark {
+  transform: translate(1px, -1px);
+}
 html[data-motion='on'] .card-tag {
     transition:
       background 140ms ease,
@@ -1233,7 +1826,52 @@ html[data-motion='on'] .stack[data-focus] i:not([data-on]) {
     opacity: 0.25;
   }
 
+/* One custom surface replaces browser-native title popups across the app. */
+.tip {
+  position: fixed;
+  z-index: 10000;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 7px 10px;
+  border: 2px solid var(--ink);
+  border-top: 5px solid var(--tomato);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 4px 4px 0 var(--shadow-solid);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
 
+.tip[data-side='above'] {
+  transform: translate(-50%, -100%);
+}
+
+.tip[data-side='below'] {
+  transform: translate(-50%, 0);
+}
+
+html[data-motion='on'] .tip {
+  animation: tooltip-print 120ms steps(3, end) both;
+}
+
+@keyframes tooltip-print {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+  }
+}
+
+html[data-motion='off'] .tip {
+  animation: none;
+}
 
 @keyframes rule-draw {
   from {
@@ -1291,8 +1929,116 @@ html[data-motion='on'] .card-bar {
   transition: opacity 140ms ease;
 }
 
+/* The fill tracks the elapsed collection hour between one-second readings, not page entry. */
 html[data-motion='on'] .cycle i {
-  transition: transform 900ms linear;
+  transition: transform 1000ms linear;
+}
+
+html[data-motion='on'] .cycle::after {
+  animation: none;
+}
+
+html[data-motion='on'] .cycle i::after {
+  animation: cycle-ink-run 1400ms linear infinite;
+}
+
+html[data-motion='on'] .cycle b {
+  transition: left 1000ms linear;
+}
+
+html[data-motion='off'] .cycle::after {
+  animation: none;
+}
+
+html[data-motion='off'] .cycle i::after {
+  animation: none;
+}
+
+@keyframes cycle-ink-run {
+  to {
+    background-position: 28px 0;
+  }
+}
+
+@keyframes card-ledger-register {
+  0%,
+  6% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  12% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  15%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes card-index-tab {
+  0%,
+  68%,
+  100% {
+    transform: translate(0, 0) rotate(0deg) scale(0.92);
+    opacity: 0.8;
+    box-shadow: 2px 2px 0 var(--shadow-solid);
+  }
+  72% {
+    transform: translate(3px, -2px) rotate(90deg) scale(1.2);
+    opacity: 1;
+    box-shadow: 3px 3px 0 var(--shadow-solid);
+  }
+  77% {
+    transform: translate(0, 0) rotate(0deg) scale(0.92);
+    opacity: 0.8;
+    box-shadow: 2px 2px 0 var(--shadow-solid);
+  }
+}
+
+@keyframes card-badge-press {
+  0%,
+  6% {
+    scale: 1;
+    rotate: 0deg;
+    box-shadow: 3px 3px 0 var(--shadow-solid);
+  }
+  7% {
+    scale: 0.68;
+    rotate: -9deg;
+    box-shadow: 1px 1px 0 var(--shadow-solid);
+  }
+  8% {
+    scale: 1.24;
+    rotate: 4deg;
+    box-shadow: 5px 5px 0 var(--shadow-solid);
+  }
+  9% {
+    scale: 0.94;
+    rotate: -2deg;
+    box-shadow: 2px 2px 0 var(--shadow-solid);
+  }
+  10%,
+  100% {
+    scale: 1;
+    rotate: 0deg;
+    box-shadow: 3px 3px 0 var(--shadow-solid);
+  }
+}
+
+@keyframes card-link-nudge {
+  0%,
+  7% {
+    translate: 0 0;
+  }
+  8.5% {
+    translate: 4px -4px;
+  }
+  10%,
+  100% {
+    translate: 0 0;
+  }
 }
 
 html[data-motion='on'] .cta {
@@ -1433,6 +2179,26 @@ html[data-motion='on'] .pending-rail i {
   }
 }
 
+@media (max-width: 600px) {
+  .repo-page {
+    padding-top: 26px;
+  }
+
+  .repo-title-owner {
+    font-size: 0.34em;
+  }
+
+  .commit-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .commit-sha {
+    margin-left: 0;
+  }
+}
+
 /* Route transitions ---------------------------------------------------------
    The platform API does the work (router: defaultViewTransition); this is only the
    vocabulary. Pages are printed sheets: the outgoing one lifts away, the incoming
@@ -1452,6 +2218,19 @@ html[data-motion='off']::view-transition-new(root) {
   animation: none;
 }
 
+/* The masthead is the one block that does not change on a route change. Naming it lifts it out of
+   the page snapshot and holds it still, so a navigation reads as the sheet underneath turning over
+   instead of the whole document going away and coming back — which is what a full reload looks
+   like, and what the unnamed root crossfade was imitating. */
+.masthead {
+  view-transition-name: masthead;
+}
+
+/* biome-ignore lint/correctness/noUnknownTypeSelector: the argument of a view-transition pseudo-element is a group name, not a type selector. */
+::view-transition-group(masthead) {
+  animation: none;
+}
+
 @keyframes page-lift {
   to {
     opacity: 0;
@@ -1463,5 +2242,48 @@ html[data-motion='off']::view-transition-new(root) {
   from {
     opacity: 0;
     transform: translateY(10px);
+  }
+}
+
+@keyframes card-title-reprint {
+  0%, 78%, 100% {
+    transform: scaleX(1);
+  }
+  80% {
+    transform: scaleX(0.72);
+  }
+  82% {
+    transform: scaleX(1);
+  }
+  84% {
+    transform: scaleX(0.9);
+  }
+  86% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes card-corner-register {
+  0%,
+  4%,
+  100% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  5% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  6% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  7% {
+    opacity: 0.72;
+    transform: scale(0.98);
+  }
+  8% {
+    opacity: 0;
+    transform: scale(1);
   }
 }
