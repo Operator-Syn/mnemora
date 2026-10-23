@@ -42,18 +42,20 @@ if [ "$count" -ne 1 ]; then
   exit 1
 fi
 
-# Then Biome, on the one staged path. Pinned to the version biome.json targets, so the gate
-# cannot change behaviour because a newer release was published overnight.
+# Then Biome, on the one staged path, using the copy installed in frontend/node_modules — no
+# download, no resolution, so the gate costs milliseconds instead of a network round trip. The
+# version is whatever frontend/package.json pins, which is the same one biome.json targets.
 #
 # --write fixes in the working tree, which would leave the commit holding the unfixed bytes;
 # re-adding keeps what was fixed and what is committed the same file. The command's exit code
 # is the hook's, so a remaining error fails the commit.
-biome_version=$(sed -n 's/.*biomejs.dev\/schemas\/\([0-9][0-9.]*\)\/schema.json.*/\1/p' biome.json)
-if [ -z "$biome_version" ]; then
-  biome_version=2.4.15
-fi
+biome_bin="$(git rev-parse --show-toplevel)/frontend/node_modules/.bin/biome"
 
-npx --yes "@biomejs/biome@$biome_version" check --write --no-errors-on-unmatched \
-  --files-max-size=2097152 "$staged"
+if [ -x "$biome_bin" ]; then
+  "$biome_bin" check --write --no-errors-on-unmatched --files-max-size=2097152 "$staged"
+else
+  echo "pre-commit: biome is not installed — run 'npm install' in frontend/." >&2
+  echo "pre-commit: skipping the lint step so the one-file check still stands." >&2
+fi
 
 git add -- "$staged"
