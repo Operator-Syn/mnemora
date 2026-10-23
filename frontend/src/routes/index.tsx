@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
-import type { Repository, RepositoryIndex } from '../lib/mnemora'
+import type { Repository } from '../lib/mnemora'
 
 export const Route = createFileRoute('/')({
   // Runs in the Worker on every request (and again on client navigations, where the server
@@ -142,7 +142,7 @@ function Ticker({ facts }: { facts: string[] }) {
 }
 
 function Home() {
-  const data = Route.useLoaderData() as RepositoryIndex
+  const data = Route.useLoaderData()
   const isEmpty = data.ok && data.repositories.length === 0
   const byCommits = useMemo(
     () => [...data.repositories].sort((a, b) => (b.commit_count ?? 0) - (a.commit_count ?? 0)),

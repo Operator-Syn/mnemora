@@ -1,6 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
-import type { RepositoryIndex } from '../lib/mnemora'
 
 export const Route = createFileRoute('/about')({
   // Same server function as the home page: the numbers here are read, not typed.
@@ -51,7 +50,7 @@ function formatDate(value: string | null): string {
 }
 
 function About() {
-  const data = Route.useLoaderData() as RepositoryIndex
+  const data = Route.useLoaderData()
   const hasNumbers = data.ok && data.repositories.length > 0
 
   return (
