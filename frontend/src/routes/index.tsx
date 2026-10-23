@@ -145,45 +145,6 @@ function useCycleCountdown(initialMinutes: number): { minutesLeft: number; progr
   return { minutesLeft, progress: Math.min(1, Math.max(0, (60 - minutesLeft) / 60)) }
 }
 
-/**
- * Reveals marked blocks as they enter the viewport. The `motion-ready` class is added by this
- * effect, so a page that never runs JavaScript keeps every element visible.
- */
-function useScrollReveal(): void {
-  useEffect(() => {
-    const root = document.documentElement
-    // [data-deal] marks a container whose children should animate as they come into view (the card
-    // grid). Watching the container means the stagger plays when the reader arrives, instead of
-    // burning itself while the grid is still below the fold.
-    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal], [data-deal]'))
-    if (nodes.length === 0) return
-
-    if (!('IntersectionObserver' in window)) {
-      for (const node of nodes) node.dataset.in = ''
-      return
-    }
-
-    // The inline script already added this when motion is on; adding it again is a no-op, and if
-    // the script was skipped the page must still reveal rather than stay hidden.
-    root.classList.add('motion-ready')
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue
-          ;(entry.target as HTMLElement).dataset.in = ''
-          observer.unobserve(entry.target)
-        }
-      },
-      { rootMargin: '0px 0px -10% 0px', threshold: 0.12 },
-    )
-    for (const node of nodes) observer.observe(node)
-    return () => {
-      observer.disconnect()
-      root.classList.remove('motion-ready')
-    }
-  }, [])
-}
-
 function Home() {
   const data = Route.useLoaderData()
   const isEmpty = data.ok && data.repositories.length === 0
@@ -226,7 +187,6 @@ function Home() {
   const repoCount = useCountUp(data.repositories.length)
   const commitCount = useCountUp(data.totalCommits)
   const cycle = useCycleCountdown(data.nextPassInMinutes)
-  useScrollReveal()
 
   return (
     <main>
