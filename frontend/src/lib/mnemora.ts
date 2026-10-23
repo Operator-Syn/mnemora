@@ -19,7 +19,7 @@ export interface Repository {
   full_name: string
   description: string | null
   html_url: string
-  default_branch: string
+  default_branch: string | null
   languages_bytes: Record<string, number>
   commit_count: number | null
   pushed_at_utc: string | null
@@ -55,6 +55,33 @@ export interface RepositoryIndex {
    */
   nextPassInMinutes: number
 }
+
+export interface Commit {
+  sha: string
+  message: string | null
+  author_login: string | null
+  author_name: string | null
+  authored_at_utc: string | null
+  committed_at_utc: string | null
+  repository_id: number
+  full_name: string
+  html_url: string
+}
+
+export interface CommitPage {
+  repository: string | null
+  limit: number
+  before_ms: number | null
+  returned: number
+  next_before_ms: number | null
+  commits: Commit[]
+}
+
+export type ReadApiFailure = 'config' | 'network' | 'api' | 'not-found'
+
+export type ReadApiResult<T> = { ok: true; data: T } | { ok: false; kind: ReadApiFailure }
+
+export const COMMIT_PAGE_SIZE = 50
 
 function apiUrl(): string {
   return process.env.MNEMORA_API_URL || DEFAULT_API_URL
@@ -148,3 +175,75 @@ export const getRepositoryIndex = createServerFn({ method: 'GET' }).handler(
     }
   },
 )
+
+function validateFullName(value: unknown): string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value)) {
+    throw new Error('Invalid public repository name')
+  }
+  return value
+}
+
+function validateRepositoryInput(input: unknown): { fullName: string } {
+  if (typeof input !== 'object' || input === null || !('fullName' in input)) {
+    throw new Error('Invalid public repository request')
+  }
+  return { fullName: validateFullName(input.fullName) }
+}
+
+function validateCommitPageInput(input: unknown): { fullName: string; beforeMs?: number } {
+  const { fullName } = validateRepositoryInput(input)
+  if (typeof input !== 'object' || input === null || !('beforeMs' in input)) {
+    return { fullName }
+  }
+
+  const beforeMs = input.beforeMs
+  if (beforeMs === undefined) return { fullName }
+  if (typeof beforeMs !== 'number' || !Number.isSafeInteger(beforeMs) || beforeMs <= 0) {
+    throw new Error('Invalid commit cursor')
+  }
+  return { fullName, beforeMs }
+}
+
+async function readApi<T>(path: string, query: Record<string, string>): Promise<ReadApiResult<T>> {
+  let key: string
+  let url: URL
+  try {
+    key = readKey()
+    url = new URL(`${apiUrl().replace(/\/+$/, '')}/${path}`)
+  } catch {
+    return { ok: false, kind: 'config' }
+  }
+
+  for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value)
+
+  let response: Response
+  try {
+    response = await fetch(url, { headers: { 'X-Mnemora-Read-Key': key } })
+  } catch {
+    return { ok: false, kind: 'network' }
+  }
+
+  if (response.status === 404) return { ok: false, kind: 'not-found' }
+  if (!response.ok) return { ok: false, kind: 'api' }
+
+  try {
+    return { ok: true, data: (await response.json()) as T }
+  } catch {
+    return { ok: false, kind: 'api' }
+  }
+}
+
+export const getRepositoryDetails = createServerFn({ method: 'GET' })
+  .validator(validateRepositoryInput)
+  .handler(async ({ data }) => readApi<Repository>('repository', { id: data.fullName }))
+
+export const getRepositoryCommitPage = createServerFn({ method: 'GET' })
+  .validator(validateCommitPageInput)
+  .handler(async ({ data }) => {
+    const query: Record<string, string> = {
+      repository_id: data.fullName,
+      limit: String(COMMIT_PAGE_SIZE),
+    }
+    if (data.beforeMs !== undefined) query.before_ms = String(data.beforeMs)
+    return readApi<CommitPage>('commits', query)
+  })
