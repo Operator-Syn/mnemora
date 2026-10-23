@@ -319,7 +319,10 @@ read "7,2247,224". The reservation is layout, not content.
 query, and lands on its final value immediately when motion is off. A visitor who stopped motion does
 not get a page that still counts at them.
 - **Section rules** — brows draw their hairline across on first view (460ms, 100ms delay).
-- **Card entrance** — 10px rise with 45ms stagger, first 12 only, once per load.
+- **Card entrance** — 10px rise with 45ms stagger, first 12 only, and it plays when the grid
+  *arrives*, not when the document parses: the grid carries `data-deal`, the observer marks it
+  `data-in`, and the cards animate from that. Previously all 25 animated while still below the fold,
+  so the one moment the reader could have seen them was the one moment they were finished.
 - **The stack** — every segment is at its true width in every frame; the whole bar prints up
   (opacity 0.25 → 1 over 420ms). It used to grow segment by segment with a 90ms stagger, and any
   glance during that second read the unfilled track as unlabelled data.
@@ -347,6 +350,17 @@ property — which silently disables every hover transform on the element for th
 Transitions API (`defaultViewTransition` on the router; no motion library). The outgoing sheet lifts
 8px and fades in 180ms, the incoming one registers 10px down over 300ms. Exits are faster than
 entrances because leaving should not be something you wait for.
+
+**The Pre-Paint Rule.** Anything that changes what the first frame looks like is decided in the
+inline script, before the document paints: the theme class, `data-motion`, `data-motion-mode`, and
+`motion-ready`. A state that arrives after hydration is not a detail — it is a visible restart. The
+reveal class used to be added in an effect, so sections painted visible and were then hidden and
+re-animated ~120ms later; three transitions were cancelled and the page blinked on every load.
+
+**The Label Rule.** The server cannot know a stored preference, so it must not render one. Each
+toggle ships *all* of its labels in the HTML and `html[data-theme-mode]` / `html[data-motion-mode]`
+decide which is visible. Rendering only the current mode meant the server always sent `Motion: sys`
+and hydration swapped it to `Motion: on` — the largest text change in the masthead, on every load.
 
 **The Motion Choice Rule.** Every animation and transition gates on `html[data-motion='on']`, a value
 resolved *before first paint* by an inline script and written to `<html>`. It starts from
