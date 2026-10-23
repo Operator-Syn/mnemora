@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "vite dev --port 3000",
-    "dev:worker": "npm run build && wrangler dev -c dist/server/wrangler.json",
+    "dev:worker": "sh scripts/dev-worker.sh",
     "generate-routes": "tsr generate",
     "build": "vite build",
     "preview": "npm run build && vite preview",
@@ -15,7 +15,9 @@
     "cf-typegen": "wrangler types",
     "skills:sync": "node scripts/sync-tanstack-skills.mjs",
     "skills:list": "npm exec --no -- intent list",
-    "hooks:install": "npm exec --no -- intent hooks install --scope project --agents all"
+    "hooks:install": "npm exec --no -- intent hooks install --scope project --agents all",
+    "clean": "node -e \"for (const p of ['dist','dist-ssr','.wrangler','.tanstack','.output','node_modules/.vite']) require('node:fs').rmSync(p,{recursive:true,force:true}); console.log('cleaned build output, worker state and vite cache')\"",
+    "dev:fresh": "npm run clean && npm run dev"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
