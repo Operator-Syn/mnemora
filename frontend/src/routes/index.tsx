@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
 import type { Repository } from '../lib/mnemora'
+import { markBackgroundRefreshEnd, markBackgroundRefreshStart } from '../components/RoutePendingVeil'
+
+const HOUR_MS = 3_600_000
 
 export const Route = createFileRoute('/')({
   // Runs in the Worker on every request (and again on client navigations, where the server
@@ -99,26 +102,30 @@ function Tally({ value, final }: { value: number; final: number }) {
   )
 }
 
-/**
- * True once a route has mounted in this document. The first mount was served: its figures came down
- * in the HTML already final. Only later mounts — client navigations — have a figure worth counting.
- */
-let countedOnce = false
+/** The figures this document has already put on screen, by label. */
+const figuresShown = new Map<string, number>()
 
 /**
- * Counts a figure up when the number arrives client-side.
+ * Counts a figure up, but only when the figure moved.
  *
- * On a server-rendered load the HTML already says `25 repositories`, so counting from zero made the
- * figure jump backwards before climbing: a refresh flashed "2 repositories" over a page that had
- * just said 25. A served figure stays put; a navigated-to figure counts.
+ * A served page arrives with the number already in the HTML, so it must never rewind. The old rule
+ * counted on every mount after the first, which meant clicking a nav link and coming back replayed
+ * "12 repositories … 20 … 25" over figures the reader had just read — the loudest "this page
+ * reloaded" signal on the page, and untrue, because nothing had changed. Now the climb only runs
+ * when the new figure differs from the one this document last showed, and it runs from that previous
+ * value to the new one, which is the actual change.
  */
-function useCountUp(target: number, duration = 900): number {
+function useCountUp(key: string, target: number, duration = 900): number {
   const [value, setValue] = useState(target)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (!countedOnce) {
-      countedOnce = true
+
+    const previous = figuresShown.get(key)
+    figuresShown.set(key, target)
+
+    // First sight of this figure in this document, or it has not moved: print it.
+    if (previous === undefined || previous === target) {
       setValue(target)
       return
     }
@@ -134,32 +141,117 @@ function useCountUp(target: number, duration = 900): number {
     const tick = (now: number) => {
       const progress = Math.min(1, (now - start) / duration)
       const eased = 1 - (1 - progress) ** 3
-      setValue(Math.round(target * eased))
+      setValue(Math.round(previous + (target - previous) * eased))
       if (progress < 1) frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [target, duration])
+  }, [key, target, duration])
 
   return value
 }
 
-/** Counts the minutes down locally after the server-rendered value, so the page keeps moving. */
-function useCycleCountdown(initialMinutes: number): { minutesLeft: number; progress: number } {
-  const [minutesLeft, setMinutesLeft] = useState(initialMinutes)
+/**
+ * The collector runs on the UTC hour, so both readings are a function of the wall clock and never of
+ * how long this tab has been open.
+ *
+ * It used to count elapsed time from mount and clamp at zero, which meant a page left alone for an
+ * hour ended up parked at "Next pass in 0 min" and "100% through this hour" — permanently, because
+ * nothing ever moved the hour on. Mount is not a clock: at the hour boundary the countdown has to
+ * return to 60 and the gauge has to start again.
+ */
+function useCollectorClock(initialMinutes: number): {
+  minutesLeft: number
+  progress: number
+  hour: number | null
+  visible: boolean
+} {
+  const [now, setNow] = useState<number | null>(null)
+  const [visible, setVisible] = useState(true)
 
   useEffect(() => {
-    const startedAt = Date.now()
-    const update = () => {
-      const elapsed = Math.floor((Date.now() - startedAt) / 60000)
-      setMinutesLeft(Math.max(0, initialMinutes - elapsed))
-    }
-    update()
-    const timer = window.setInterval(update, 15000)
-    return () => window.clearInterval(timer)
-  }, [initialMinutes])
+    let timer = 0
 
-  return { minutesLeft, progress: Math.min(1, Math.max(0, (60 - minutesLeft) / 60)) }
+    const tick = () => setNow(Date.now())
+    const start = () => {
+      window.clearInterval(timer)
+      tick()
+      timer = window.setInterval(tick, 1000)
+    }
+    const stop = () => {
+      window.clearInterval(timer)
+      timer = 0
+    }
+    // A hidden tab throttles or suspends its interval, so it is not left running to drift: it stops,
+    // and recomputes from the wall clock the moment the reader comes back.
+    const onVisibility = () => {
+      const next = document.visibilityState === 'visible'
+      setVisible(next)
+      if (next) start()
+      else stop()
+    }
+
+    start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
+
+  // Server render and first paint use the snapshot the loader took, so the markup matches it.
+  if (now === null) {
+    return {
+      minutesLeft: initialMinutes,
+      progress: (60 - initialMinutes) / 60,
+      hour: null,
+      visible,
+    }
+  }
+
+  const date = new Date(now)
+  const minutesLeft = 60 - date.getUTCMinutes()
+  const progress =
+    (date.getUTCMinutes() * 60_000 + date.getUTCSeconds() * 1000 + date.getUTCMilliseconds()) /
+    HOUR_MS
+
+  return { minutesLeft, progress, hour: Math.floor(now / HOUR_MS), visible }
+}
+
+/**
+ * A route loader is a snapshot: it ran once, for whatever hour this document was requested in, so an
+ * untouched tab kept last hour's rows while the stamp aged. When the loaded data belongs to an hour
+ * that has ended, ask again.
+ *
+ * The collector needs a minute or two to write the new hour, so the re-read is tried a handful of
+ * times early in the hour and then left alone — a dead collector must not turn an open tab into a
+ * poller. The first attempt that comes back with this hour's rows retires the rest.
+ */
+function useHourlyRefresh(refreshedAt: string | null, hour: number | null, visible: boolean) {
+  const router = useRouter()
+  const refreshedHour =
+    refreshedAt === null ? null : Math.floor(new Date(refreshedAt).getTime() / HOUR_MS)
+
+  useEffect(() => {
+    if (refreshedHour === null || hour === null) return
+    if (hour <= refreshedHour) return
+    if (!visible) return
+
+    const attempts = [0, 60_000, 120_000, 180_000, 240_000]
+    const timers = attempts.map((delay) =>
+      window.setTimeout(() => {
+        markBackgroundRefreshStart()
+        void router
+          .invalidate()
+          .catch(() => undefined)
+          .finally(markBackgroundRefreshEnd)
+      }, delay),
+    )
+
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer)
+    }
+  }, [hour, refreshedHour, router, visible])
 }
 
 function Home() {
@@ -201,9 +293,10 @@ function Home() {
     data.languages.reduce((sum, entry) => sum + entry.share, 0) + data.otherShare
   const otherTotal = data.otherShare + Math.max(0, 1 - accountedShare)
 
-  const repoCount = useCountUp(data.repositories.length)
-  const commitCount = useCountUp(data.totalCommits)
-  const cycle = useCycleCountdown(data.nextPassInMinutes)
+  const repoCount = useCountUp('repositories', data.repositories.length)
+  const commitCount = useCountUp('commits', data.totalCommits)
+  const cycle = useCollectorClock(data.nextPassInMinutes)
+  useHourlyRefresh(data.refreshedAt, cycle.hour, cycle.visible)
 
   return (
     <main>
@@ -272,6 +365,7 @@ function Home() {
                 aria-valuenow={Math.round(cycle.progress * 100)}
               >
                 <i style={{ '--progress': cycle.progress } as CSSProperties} />
+                <b aria-hidden="true" />
               </div>
             </>
           )}
@@ -337,7 +431,7 @@ function Home() {
                       <i
                         key={entry.name}
                         data-on={focusedLanguage === entry.name ? '' : undefined}
-                        title={`${entry.name} · ${(entry.share * 100).toFixed(0)}%`}
+                        data-tip={`${entry.name} · ${(entry.share * 100).toFixed(0)}%`}
                         onMouseEnter={() => setFocusedLanguage(entry.name)}
                         onMouseLeave={() => setFocusedLanguage(null)}
                         style={{
@@ -350,7 +444,7 @@ function Home() {
                       // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only cross-highlight; the share is written in the legend and in the title.
                       <i
                         data-on={focusedLanguage === 'Other' ? '' : undefined}
-                        title={`Other · ${(otherTotal * 100).toFixed(0)}%`}
+                        data-tip={`Other · ${(otherTotal * 100).toFixed(0)}%`}
                         onMouseEnter={() => setFocusedLanguage('Other')}
                         onMouseLeave={() => setFocusedLanguage(null)}
                         style={{
@@ -436,43 +530,71 @@ function Home() {
                       .sort((a, b) => b[1] - a[1])
                       .slice(0, 4)
                     const totalBytes = langs.reduce((sum, [, bytes]) => sum + bytes, 0) || 1
+                    const leadingLanguage = langs[0]
+                    const languageMixTip = leadingLanguage
+                      ? `Top share · ${leadingLanguage[0]} ${Math.round((leadingLanguage[1] / totalBytes) * 100)}%`
+                      : 'No indexed language data'
+                    const [owner = '', repositoryName = repo.full_name] = repo.full_name.split('/')
 
                     return (
                       <article
                         key={`${language ?? 'all'}:${repo.repository_id}`}
                         className="card rise"
-                        style={{ animationDelay: `${300 + Math.min(index, 11) * 45}ms` }}
+                        style={{
+                          animationDelay: `${300 + Math.min(index, 11) * 45}ms`,
+                          '--card-wave-delay': `${index * 150}ms`,
+                          '--card-register-phase': `${-((index % 9) * 600)}ms`,
+                          '--card-tab-phase': `${-((index % 9) * 300)}ms`,
+                          '--card-reprint-phase': `${-((index % 7) * 240)}ms`,
+                        } as CSSProperties}
                       >
-                        <span className="card-tag" title={`${repo.commit_count ?? 0} commits`}>
-                      {repo.commit_count ?? 0}
-                    </span>
+                        <svg className="card-register" aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <path d="M0 7V0H4 M96 0H100V7 M100 93V100H96 M4 100H0V93" />
+                        </svg>
                         <h3>
                           <a
+                            className="card-title-link"
                             href={repo.html_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            title={repo.full_name}
+                            aria-label={`Open ${repo.full_name} on GitHub`}
                           >
-                            <span className="card-title">{repo.full_name.split('/')[1]}</span>
+                            <span className="card-title-wrap">
+                              <span className="card-title">{repositoryName}</span>
+                            </span>
+                            <svg className="card-link-mark" aria-hidden="true" viewBox="0 0 16 16" fill="none">
+                              <path d="M9 2h5v5M14 2 7 9" />
+                              <path d="M12 9v4H2V3h4" />
+                            </svg>
                           </a>
                         </h3>
-                        <p>{repo.description ?? 'No description on GitHub.'}</p>
-                        <div className="card-bar">
-                          {langs.map(([name, bytes]) => (
-                            <i
-                              key={name}
-                              title={`${name} · ${Math.round((bytes / totalBytes) * 100)}%`}
-                              style={{
-                                width: `${(bytes / totalBytes) * 100}%`,
-                                background: languageColour(name, data.languages),
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <div className="card-foot">
-                          <span>{formatIsoDate(repo.pushed_at_utc)}</span>
-                          <span>{repo.archived ? 'archived' : (dominantLanguage(repo) ?? 'no index')}</span>
-                        </div>
+                        <Link
+                          className="card-detail-link"
+                          to="/repositories/$owner/$repo"
+                          params={{ owner, repo: repositoryName }}
+                          aria-label={`View ${repo.full_name} project details and recent commits`}
+                        >
+                          <span className="card-tag" data-tip={`${repo.commit_count ?? 0} commits`}>
+                            {repo.commit_count ?? 0}
+                          </span>
+                          <p>{repo.description ?? 'No description on GitHub.'}</p>
+                          <div className="card-bar" data-tip={languageMixTip}>
+                            {langs.map(([name, bytes]) => (
+                              <i
+                                key={name}
+                                data-tip={`${name} · ${Math.round((bytes / totalBytes) * 100)}%`}
+                                style={{
+                                  width: `${(bytes / totalBytes) * 100}%`,
+                                  background: languageColour(name, data.languages),
+                                }}
+                              />
+                            ))}
+                          </div>
+                          <div className="card-foot">
+                            <span>{formatIsoDate(repo.pushed_at_utc)}</span>
+                            <span>{repo.archived ? 'archived' : (dominantLanguage(repo) ?? 'no index')}</span>
+                          </div>
+                        </Link>
                       </article>
                     )
                   })}
