@@ -22,6 +22,16 @@ typography:
     fontSize: "30px"
     fontWeight: 400
     lineHeight: 1
+  mark-compact-tablet:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "22px"
+    fontWeight: 400
+    lineHeight: 1
+  mark-compact-phone:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "19px"
+    fontWeight: 400
+    lineHeight: 1
   headline:
     fontFamily: "Anton, Arial Narrow, sans-serif"
     fontSize: "24px"
@@ -42,6 +52,21 @@ typography:
     fontSize: "17px"
     fontWeight: 400
     lineHeight: 1.08
+  repo-title:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "clamp(36px, 6vw, 64px)"
+    fontWeight: 400
+    lineHeight: 1.04
+  long-repo-title:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "clamp(38px, 4.4vw, 48px)"
+    fontWeight: 400
+    lineHeight: 1.12
+  repo-state-title:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "clamp(28px, 4vw, 42px)"
+    fontWeight: 400
+    lineHeight: 1.1
   body:
     fontFamily: "Public Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "18px"
@@ -171,11 +196,15 @@ list, so add a row here before adding one there.
 |---|---|---|---|
 | Display | clamp(38px, 6.6vw, 92px), 1.1 | Anton | the page headline, one per page |
 | Mark | 30px, 1 | Anton | masthead wordmark |
-| Mark (compact) | 22px ≤760px, 19px ≤420px, 1 | Anton | the same wordmark once the masthead must stay one line |
+| Mark (compact tablet) | 22px, 1 | Anton | the same wordmark at ≤760px once the masthead must stay one line |
+| Mark (compact phone) | 19px, 1 | Anton | the same wordmark at ≤420px |
 | Headline | 24px, 1.08 | Anton | section titles (`Public repositories`) |
 | Step title | 21px, 1.08 | Anton | the four pipeline cards on /about |
 | Title | 19px, 1.08 | Anton | panel titles (`By the numbers`) |
 | Card title | 17px, 1.08 | Anton | repository name |
+| Detail title | clamp(36px, 6vw, 64px), 1.12 | Anton | repository name on the detail page |
+| Detail title (long) | clamp(38px, 4.4vw, 48px), 1.12 | Anton | long repository names on detail pages; owner stays a smaller mono attribution line |
+| Repo state title | clamp(28px, 4vw, 42px), 1.1 | Anton | not-found and unavailable repository states |
 | Body | 18px, 1.5, 56ch max | Public Sans | the lede |
 | Body small | 15px, 1.5 | Public Sans | the "who runs it" lines |
 | Data | 14px, 1.4 | Plex Mono | key/value rows, tabular numerals |
@@ -229,11 +258,23 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **Shape:** square (0 radius), 3px ink border, a flex column so the bar and footer align across a row.
 - **Background:** paper.
 - **Shadow Strategy:** 6px offset at rest, cobalt at 9px on hover with a -2px translate.
+- **Ledger motion:** a 5px cobalt registration stroke travels across the cards’ top rules in commit-rank
+  order over 480ms. The commit badge visibly compresses, tips, and rebounds with its shadow as the
+  external-link arrow jumps outward with each card’s turn. These three beats repeat on an 8s cadence,
+  staggered 150ms per rank; the counts, descriptions, and language shares themselves stay still. A separate sunflower
+  registration tab snaps and settles on an independent 3.2s loop, phased over a fixed nine-card wheel;
+  adding repositories never lengthens its cycle or queues another pass. Motion off stops both cadences.
+- **Corner register:** four tomato crop marks press and recoil on their own 5.4s loop, phased
+  independently in nine bounded 600ms steps. They do not share or reset with the cobalt rank pass;
+  motion off stops this loop too, and content and values stay still. The commit badge is stacked at
+  z-index 4 above the cobalt stroke at 3 and crop marks at 2, so the count stays legible.
 - **Internal Padding:** 16px 15px 12px.
-- **Title:** a fixed two-line slot (`height: calc(2.4em + 3px)`), with the full name in `title`. The
-  text block is *centred* in that slot and the rule is drawn under the anchor, so the rule tracks the
-  last line of whatever the name turns out to be: no gap between a short name and its rule, and the
-  slot absorbs the difference as space above the words instead. The card keeps one height.
+- **Title:** a fixed two-line slot (`height: calc(2.4em + 3px)`). The highlighted repository title and
+  square-arrow mark are the only GitHub link. The rest of the paper surface is an internal link to the
+  project detail route; its accessible name identifies that destination. Hovering the title highlights
+  only that external action, while the whole card gets a cobalt lift on hover/focus.
+  The text block is *centred* in the slot and its rule sits directly under the last line, so a short
+  name does not leave a gap and the card keeps one height.
 - **The rule belongs to the card, not to the text.** A per-name underline changes length with the
   name and vanishes where the clamp cuts a line, which is the inconsistency this replaced; a rule on
   the anchor is the same length on every card and still sits under the words.
@@ -244,11 +285,36 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **Commit badge:** tomato, `on-accent` text, 2px ink border, 11.5px mono uppercase, offset -10px above
   the top edge.
 
+### Repository Detail
+
+- The route is `/repositories/$owner/$repo`; the heading shows the repository name and owner, followed
+  by the GitHub description and an explicit collection-status note.
+- Names longer than 35 characters keep the owner as a smaller mono attribution line and set the full
+  repository name below it at the long-title size, balanced across available width. Short names retain
+  the inline owner prefix and full display scale.
+- The commit ledger starts with 50 rows, newest first. “Load commits 51–100” requests the next 50 with
+  the API's `next_before_ms` cursor; each later request advances from the prior cursor, never an offset.
+- A row leads with the commit subject and exposes the remaining message on demand. Author, UTC date,
+  and a linked short SHA remain visible without opening the full message.
+- The detail page is a ruled list, not a stack of commit cards. Keep its loading, retry, empty, and
+  end-of-index states explicit, and do not imply that a partial collection is complete.
+
 ### Panels
 
 - **Shape:** square, 3px ink border, `10px 10px 0` ink shadow.
 - **Content:** a mono key/value list with 2px rules between rows, or a stacked bar with a two-column
   legend.
+
+### Tooltips
+
+Every supplemental hover/focus note uses the shared `BrandTooltip` portal, never the browser's native
+`title` popup. The portal is unclipped by card/panel overflow, placed against the trigger, and uses the
+same square paper, ink rule, tomato registration edge, mono label, and hard offset shadow as the
+printed notice. Triggers opt in with `data-tip`; pointer hover and keyboard focus on focusable triggers
+announce the note via `aria-describedby`, Escape dismisses it, scrolling hides it, and reduced-motion
+mode is respected. On card language bars, each colored segment names its own share and the full track
+provides a concise leading-share fallback, so the border and gaps are not dead hover zones. Keep the
+note supplementary: essential meaning and controls remain visible or available without hovering.
 
 ### Theme Toggle
 
@@ -256,6 +322,44 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **States:** hover inverts to cobalt with cream text; focus draws a 3px cobalt ring offset 2px.
 - **Behaviour:** cycles Auto → Light → Dark, writes `data-theme` on `<html>` and persists to
   `localStorage.theme`; Auto follows `prefers-color-scheme`.
+
+### Pointer
+
+The cursor is drawn too. `public/cursors/` ships a 24px set cut to this palette, so the one surface
+no stylesheet otherwise owns belongs to the printed world:
+
+- **Default:** `default.png` on `<html>`, hotspot at the arrow tip (`2 1`).
+- **Links and controls:** `animated/pointer` — the hand rests 700ms, then presses the fingertip for
+  140ms, the two frames as authored.
+- **Prose:** `text.png` at the I-beam stem (`12 12`). The app has no editable field, so the animated
+  I-beam has no honest home and is not used.
+- **Blocked page:** `.pending-veil` runs `animated/wait` (eight 125ms frames). The reader cannot act
+  while the next route loads, so the pointer says so.
+- **Background work:** the disabled commit button runs `animated/progress`. The page is still usable
+  and only that fetch is busy; `wait` would overstate it.
+- **Not shipped:** grab, zoom, resize, help, copy, alias and context-menu frames. The site has no
+  drag, zoom, column resize, help mode or copy action — a cursor for an action that does not exist
+  claims an interaction that is not there.
+- **Through a route change:** the pointer keeps the shape it had over the control that started the
+  navigation. A view transition makes the document root the hit target for its whole duration —
+  measured: `elementFromPoint` over the masthead link returned `HTML` for ~400ms and the link stopped
+  matching `:hover` — so the shape is tracked on `<html>` from real pointer events and frozen while a
+  transition runs. Without it the hand fell back to the default arrow on every navigation and
+  snapped back when the page settled.
+
+**The Stepped Cursor Rule.** An animated image cannot animate a cursor: every engine paints the
+first frame of a GIF in `cursor` and stops. Each animated set is therefore stepped frame by frame by
+a keyframed `cursor` value with `steps(1, end)`, which does switch — verified in the browser at the
+frame boundaries, not assumed. Hotspots are read from each frame's own alpha channel; a guessed
+hotspot gives a 24px arrow that clicks several pixels away from its tip.
+
+**The Armed Cursor Rule.** The link cursor animates on hover, not permanently. It restarts from the
+resting frame as the pointer arrives, so a press never begins mid-beat, and an idle page carries no
+cursor work at all. The two link frames are preloaded and the sixteen busy frames prefetched: a
+cursor image that has not arrived falls back to the system cursor for one round trip.
+
+**The Steady Pointer Rule.** The pointer may never change shape because the page is mid-transition.
+Its shape is a promise about what is under it, and a navigation does not move the mouse.
 
 ### Ticker (removed)
 
@@ -288,6 +392,12 @@ Masthead: wordmark set in Anton, split across ink and a tomato block ("Mne" ink,
 dating the collection, then uppercase links with a 3px ink underline on hover and sunflower highlight
 on the active route. Hidden below 900px.
 
+The masthead is a named view-transition group (`view-transition-name: masthead`), so a route change
+turns the sheet underneath it instead of reprinting the head with it. Unnamed, the whole document was
+one snapshot that faded out and back, which is exactly what a full page reload looks like — measured
+on the same page: the wordmark stayed pixel-identical through the transition when named (`inf` PSNR
+against the resting frame in all nine captured frames) and dropped to 19 dB mid-fade when not.
+
 ## Motion & Cadence
 
 **Thesis: the press run.** The world is printed, so the motion is printing. Nothing fades softly or
@@ -301,14 +411,28 @@ rest of the page is quiet by comparison.
 
 - **Ink registration** — the highlight blocks wipe in left to right (`clip-path: inset(0 100% 0 0)` →
   `inset(0)`), 520ms, offset 40ms and 150ms, like ink laid on a sheet.
-- **The cycle gauge** — a printed rule under the status row whose fill is the fraction of the hour
-  elapsed. It advances every 15s and is a progress bar to assistive tech. This is the page's
-  continuous movement, and it is measuring the actual collection cycle.
-- **Live countdown** — `NEXT PASS IN n MIN` decrements locally from the server-rendered value.
-- **Hero count-up** — the repository and commit totals count from zero over 900ms. The figure is laid
-  out at its *final* width from the first frame: the settled text sits in a hidden pseudo-element that
-  reserves the space, and the live digits are absolutely positioned on top. Without that, the number
-  grew by 150px while counting, `commits.` slid sideways and the line rewrapped mid-animation.
+- **The cycle gauge** — a square-edged printed rule under the status row: paper track, cobalt ink for
+  elapsed time, fixed ink registration ticks, and a sunflower index mark at the measured edge. A
+  narrow print-stripe pattern travels inside the filled portion to show the collector clock is live.
+  It advances by exactly one repeat tile per cycle, so its start and end frames are identical; its
+  period is constant and never changes on the one-second readings. The stripe stops when motion is
+  off, while the real percentage and progressbar value remain. The scale fill still follows actual
+  elapsed time and transitions linearly over each second. Both the fill and the countdown are
+  derived from the wall clock, so at the hour boundary the gauge runs back to empty and the count
+  starts again; before that they clamped at 100% and 0 min and stayed there.
+- **Live countdown** — `NEXT PASS IN n MIN` is computed from the current UTC minute rather than
+  decremented from the server-rendered value, so it rolls over to 60 at :00 instead of bottoming out
+  at zero on a page nobody has reloaded.
+- **Hero count-up** — the repository and commit totals count over 900ms, but only when the figure has
+  moved since this document last showed it, and then from that previous value to the new one. The
+  figure is laid out at its *final* width from the first frame: the settled text sits in a hidden
+  pseudo-element that reserves the space, and the live digits are absolutely positioned on top.
+  Without that, the number grew by 150px while counting, `commits.` slid sideways and the line
+  rewrapped mid-animation.
+
+**The Moved Figure Rule.** A number only animates when it changed. Replaying a climb over figures the
+reader just read asserts that something happened, and a scrambling headline is the browser's own
+signal for a reload — clicking a nav link and coming back must not produce it.
 
 **The Counting Figure Rule.** A number that animates must not change its own width. Reserve the
 settled string as hidden pseudo-content (`content: attr(data-final)`), never as a second copy of the
@@ -322,6 +446,23 @@ not get a page that still counts at them.
 - **Card entrance** — 10px rise with 45ms stagger, first 12 only, and it plays with the page, not
   with the scrollbar. It used to wait for the grid to enter the viewport, so a reader who scrolled
   down watched already-loaded content fade and rise — indistinguishable from a second load.
+- **Ledger registration pass** — a 5px cobalt stroke draws across each card’s top rule over 480ms in
+  commit-rank order; with each stroke, its commit badge compresses and tips, then rebounds against its
+  shadow, while the external-link arrow jumps outward. These three cues move together and repeat every
+  8 seconds with 150ms rank offsets, then leave a short pause before the next sweep. The grid feels read
+  in order, not as if its stored counts or language shares are changing. The whole sequence follows the
+  Motion control.
+- **Independent registration tabs** — a 12px sunflower paper tab projects from the lower-left card edge,
+  snapping 3px and turning a quarter rotation before it settles in 320ms on its own 3.2-second cadence.
+  Nine bounded phase slots prevent the idle motion from
+  waiting behind the final ranked card; the visual grid stays active between ledger sweeps without
+  animating any stored value. Both cadences stop with Motion off.
+- **Title-rule reprint** — the sunflower underline beneath each external repository link makes a
+  brief double registration (a small contraction and return, then a second tighter press) on its own
+  4.8-second loop. Seven bounded 240ms phase slots distribute the events independently from both
+  the 8-second ranked pass and the 3.2-second paper-tab snap. The line remains present at rest, does
+  not alter the title or any repository data, and yields to the existing hover/focus draw. Motion off
+  stops it.
 - **The stack** — every segment is at its true width in every frame; the whole bar prints up
   (opacity 0.25 → 1 over 420ms). It used to grow segment by segment with a 90ms stagger, and any
   glance during that second read the unfilled track as unlabelled data.
@@ -411,8 +552,24 @@ the outgoing route keeps its DOM for the view transition.
 **The Living Rule.** At least one element must be visibly changing, and it must be reporting something
 true — the cycle gauge, the countdown, the pulse. Motion that reports nothing is noise.
 
-**The Quiet Fallback Rule.** Motion off removes every animation and every transition (measured: 46
-animations at rest, 0 with motion off, 0 when the OS asks for reduce and the control is on `sys`) while the counts, the gauge, and the countdown keep their values.
+**The Wall Clock Rule.** Every reading of the collector is a function of `Date.now()`, never of how
+long this tab has been open. A page left alone for an hour used to sit at "Next pass in 0 min" and
+"100% through this hour" until it was reloaded, because the countdown counted elapsed time from
+mount and clamped at zero — the hour never turned. The clock now derives both readings from the wall
+clock, pauses its interval while the tab is hidden, and recomputes the moment it is visible again,
+so a background tab cannot drift.
+
+**The Hourly Re-read Rule.** A route loader is a snapshot, so the index re-reads itself when the
+loaded rows belong to an hour that has ended: a handful of attempts in the first minutes after the
+boundary, then nothing until the next hour, so a dead collector cannot turn an open tab into a
+poller. That refresh is not a navigation the reader asked for, and it must not throw the
+`Reading the index` veil over a page they are already reading.
+
+**The Quiet Fallback Rule.** Motion off removes every animation and every transition (measured on the
+25-card home page: 156 animations at rest, 0 with motion off, 0 when the OS asks for reduce and the
+control is on `sys`) while the counts, the gauge, and the countdown keep their values. The stepped cursors live inside
+that gate as well: with motion off every pointer holds its resting frame and the drawn cursor still
+ships — the page stops moving, it does not go back to the system arrow.
 Content is never hidden behind motion: reveal targets start visible and only animate once JavaScript
 decides every entrance at parse time.
 
@@ -429,7 +586,12 @@ control may wrap to a second line.
 text: container rules are the same length on every card, text underlines are not.
 
 **The Printed Gauge Rule.** Never animate `width` for the cycle; it is a `transform: scaleX()` on an
-inner element so the paint stays cheap.
+inner element so the paint stays cheap. Advance from wall-clock elapsed time every second and use a
+one-second linear transform transition, so the fill stays continuous without replaying on navigation.
+The running stripe uses a fixed 28px repeating-linear-gradient tile and moves by exactly 28px per
+cycle; never vary its duration from React state, because changing animation-duration restarts the
+loop and exposes the seam. Keep the track rectangular and use only the established paper, ink,
+cobalt, sunflower, and tomato palette.
 
 ## Do's and Don'ts
 
