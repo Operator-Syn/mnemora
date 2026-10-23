@@ -171,6 +171,7 @@ list, so add a row here before adding one there.
 |---|---|---|---|
 | Display | clamp(38px, 6.6vw, 92px), 1.1 | Anton | the page headline, one per page |
 | Mark | 30px, 1 | Anton | masthead wordmark |
+| Mark (compact) | 22px ≤760px, 19px ≤420px, 1 | Anton | the same wordmark once the masthead must stay one line |
 | Headline | 24px, 1.08 | Anton | section titles (`Public repositories`) |
 | Step title | 21px, 1.08 | Anton | the four pipeline cards on /about |
 | Title | 19px, 1.08 | Anton | panel titles (`By the numbers`) |
@@ -220,10 +221,14 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 
 ### Cards
 
-- **Shape:** square (0 radius), 3px ink border.
+- **Shape:** square (0 radius), 3px ink border, a flex column so the bar and footer align across a row.
 - **Background:** paper.
 - **Shadow Strategy:** 6px offset at rest, cobalt at 9px on hover with a -2px translate.
-- **Internal Padding:** 14px 15px 12px.
+- **Internal Padding:** 16px 15px 12px.
+- **Title:** two lines maximum, `line-height: 1.2`, underline drawn with `text-decoration` (a
+  `border-bottom` on a wrapped inline link prints across the next line's text). Full name in `title`.
+- **Description:** three lines maximum, 13.5px, clamped.
+- **Language bar:** 8px, 1px ink track border, pushed down with `margin-top: auto`.
 - **Commit badge:** tomato, `on-accent` text, 2px ink border, 11.5px mono uppercase, offset -10px above
   the top edge.
 
