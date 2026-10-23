@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T14:20:00+08:00",
+  "generatedAt": "2026-10-23T14:35:00+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -209,9 +209,9 @@
         "purpose": "Card entrance, staggered 45ms, first 12 only."
       },
       {
-        "name": "grow",
-        "value": "520ms cubic-bezier(0.2,0.9,0.25,1)",
-        "purpose": "Language bar segments, staggered 90ms."
+        "name": "stack-print",
+        "value": "420ms cubic-bezier(0.16,1,0.3,1)",
+        "purpose": "The language stack fading up at full width; never drawn partially filled."
       },
       {
         "name": "count-up",
@@ -353,6 +353,11 @@
         "name": "The Footer Rule",
         "body": "The document is a column at least one viewport tall, with main flex-grow: 1, so a short page puts the footer against the bottom of the window rather than against the content it follows.",
         "section": "layout"
+      },
+      {
+        "name": "The Closed Proportion Rule",
+        "body": "A stacked bar reaches the right edge, always: rounded shares leave a percent unaccounted for, so the remainder is folded into Other before rendering, and tiny slices get a minimum width without inflating their percentage.",
+        "section": "data"
       }
     ],
     "dos": [
