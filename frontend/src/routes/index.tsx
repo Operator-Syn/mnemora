@@ -188,6 +188,15 @@ function Home() {
     ? byCommits.filter((repo) => dominantLanguage(repo) === language)
     : byCommits
 
+  /**
+   * The bar has to close. Rounded shares can leave a percent unaccounted for, and an unaccounted
+   * percent renders as empty track — which reads as data the page forgot to label. Fold every
+   * remainder into Other so the last segment always reaches the right edge.
+   */
+  const accountedShare =
+    data.languages.reduce((sum, entry) => sum + entry.share, 0) + data.otherShare
+  const otherTotal = data.otherShare + Math.max(0, 1 - accountedShare)
+
   const repoCount = useCountUp(data.repositories.length)
   const commitCount = useCountUp(data.totalCommits)
   const cycle = useCycleCountdown(data.nextPassInMinutes)
@@ -325,19 +334,17 @@ function Home() {
                         key={entry.name}
                         data-on={focusedLanguage === entry.name ? '' : undefined}
                         style={{
-                          width: `${Math.max(entry.share * 100, 0.5)}%`,
+                          width: `${entry.share * 100}%`,
                           background: STACK_COLOURS[index % STACK_COLOURS.length],
-                          animationDelay: `${index * 90}ms`,
                         }}
                       />
                     ))}
-                    {data.otherShare > 0.005 && (
+                    {otherTotal > 0.005 && (
                       <i
                         data-on={focusedLanguage === 'Other' ? '' : undefined}
                         style={{
-                          width: `${data.otherShare * 100}%`,
+                          width: `${otherTotal * 100}%`,
                           background: STACK_COLOURS[6],
-                          animationDelay: '720ms',
                         }}
                       />
                     )}
@@ -358,7 +365,7 @@ function Home() {
                         {entry.name} {(entry.share * 100).toFixed(0)}%
                       </span>
                     ))}
-                    {data.otherShare > 0.005 && (
+                    {otherTotal > 0.005 && (
                       // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only cross-highlight; the row already states the share.
                       <span
                         data-on={focusedLanguage === 'Other' ? '' : undefined}
@@ -366,7 +373,7 @@ function Home() {
                         onMouseLeave={() => setFocusedLanguage(null)}
                       >
                         <i className="sw" style={{ background: STACK_COLOURS[6] }} />
-                        Other {(data.otherShare * 100).toFixed(0)}%
+                        Other {(otherTotal * 100).toFixed(0)}%
                       </span>
                     )}
                   </div>
