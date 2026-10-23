@@ -54,6 +54,14 @@ account.
   not branding.
 - No claims about employers, clients, or credentials have been confirmed, so none may be asserted.
 
+## Reference study
+
+The visual and cadence reference for "alive but cohesive" is chriscent.is-a-dev (source:
+github.com/KishonShrill/website-portfolio), studied at runtime rather than by eye: 18 concurrent
+animations (`blink`, `spin`, `marquee`, `roll-up/down`, `expand-retract`) and 74 elements with
+transitions, all inside one terminal/dossier world. What transfers is the *method* — many small,
+true signals in one consistent language — not its palette, type, or sci-fi framing.
+
 ## Evidence on Hand
 
 - Live API responses from the Mnemora stack (25 repositories, 7,224 commits, collected 2026-10-22).
@@ -64,7 +72,10 @@ account.
 ## Product Principles
 
 1. **Evidence over assertion.** Prefer a stored number with a clear definition over an adjective. When
-   a number needs a caveat, the caveat travels with it.
+   a number needs a caveat, the caveat travels with it. **The page must also show that the evidence is
+   live:** a visible refresh time, a running countdown to the next collection, and counts that come
+   from the store rather than from prose. A still page of correct numbers still reads as a screenshot
+   of a claim; a page that is visibly running reads as a service.
 2. **The repository section is a section.** It must not swallow the site; the rest of the person has
    to have somewhere to live.
 3. **Recruiter time is the budget.** The most credible thing must be visible in the first screen, and

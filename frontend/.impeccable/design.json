@@ -1,34 +1,239 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T00:40:00+08:00",
+  "generatedAt": "2026-10-23T01:20:00+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
-      "ground": { "role": "primary", "displayName": "Sunflower Ground", "canonical": "#ffc400", "tonalRamp": ["#2b2100", "#4d3b00", "#705600", "#947100", "#b78c00", "#dba800", "#ffc400", "#ffe066"] },
-      "cobalt": { "role": "primary", "displayName": "Cobalt Block", "canonical": "#1b3bff", "tonalRamp": ["#000a3d", "#001478", "#001eb3", "#0029ee", "#1b3bff", "#5f74ff", "#9aabff", "#d5dcff"] },
-      "tomato": { "role": "secondary", "displayName": "Tomato Stamp", "canonical": "#ff3b1f", "tonalRamp": ["#3d0a03", "#6b1205", "#991a08", "#c6220b", "#ff3b1f", "#ff705c", "#ffa499", "#ffd2cc"] },
-      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#fffdf5", "tonalRamp": ["#3b372f", "#57524a", "#736d64", "#8f897f", "#aba49a", "#c7c0b5", "#e3ddd1", "#fffdf5"] },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#12100e", "tonalRamp": ["#12100e", "#2a2622", "#423d37", "#5a544c", "#726b61", "#8a8276", "#a2998b", "#bab0a0"] },
-      "ink-soft": { "role": "neutral", "displayName": "Ink Soft", "canonical": "#3b372f", "tonalRamp": ["#12100e", "#231f1a", "#2f2c26", "#3b372f", "#57524a", "#736d64", "#8f897f", "#aba49a"] },
-      "sun": { "role": "secondary", "displayName": "Sunflower Highlight", "canonical": "#ffc400", "tonalRamp": ["#2b2100", "#4d3b00", "#705600", "#947100", "#b78c00", "#dba800", "#ffc400", "#ffe066"] },
-      "on-accent": { "role": "neutral", "displayName": "On Accent", "canonical": "#12100e", "tonalRamp": ["#12100e", "#2a2622", "#423d37", "#5a544c", "#726b61", "#8a8276", "#a2998b", "#bab0a0"] }
+      "ground": {
+        "role": "primary",
+        "displayName": "Sunflower Ground",
+        "canonical": "#ffc400",
+        "tonalRamp": [
+          "#2b2100",
+          "#4d3b00",
+          "#705600",
+          "#947100",
+          "#b78c00",
+          "#dba800",
+          "#ffc400",
+          "#ffe066"
+        ]
+      },
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Cobalt Block",
+        "canonical": "#1b3bff",
+        "tonalRamp": [
+          "#000a3d",
+          "#001478",
+          "#001eb3",
+          "#0029ee",
+          "#1b3bff",
+          "#5f74ff",
+          "#9aabff",
+          "#d5dcff"
+        ]
+      },
+      "tomato": {
+        "role": "secondary",
+        "displayName": "Tomato Stamp",
+        "canonical": "#ff3b1f",
+        "tonalRamp": [
+          "#3d0a03",
+          "#6b1205",
+          "#991a08",
+          "#c6220b",
+          "#ff3b1f",
+          "#ff705c",
+          "#ffa499",
+          "#ffd2cc"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#fffdf5",
+        "tonalRamp": [
+          "#3b372f",
+          "#57524a",
+          "#736d64",
+          "#8f897f",
+          "#aba49a",
+          "#c7c0b5",
+          "#e3ddd1",
+          "#fffdf5"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#12100e",
+        "tonalRamp": [
+          "#12100e",
+          "#2a2622",
+          "#423d37",
+          "#5a544c",
+          "#726b61",
+          "#8a8276",
+          "#a2998b",
+          "#bab0a0"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Ink Soft",
+        "canonical": "#3b372f",
+        "tonalRamp": [
+          "#12100e",
+          "#231f1a",
+          "#2f2c26",
+          "#3b372f",
+          "#57524a",
+          "#736d64",
+          "#8f897f",
+          "#aba49a"
+        ]
+      },
+      "sun": {
+        "role": "secondary",
+        "displayName": "Sunflower Highlight",
+        "canonical": "#ffc400",
+        "tonalRamp": [
+          "#2b2100",
+          "#4d3b00",
+          "#705600",
+          "#947100",
+          "#b78c00",
+          "#dba800",
+          "#ffc400",
+          "#ffe066"
+        ]
+      },
+      "on-accent": {
+        "role": "neutral",
+        "displayName": "On Accent",
+        "canonical": "#12100e",
+        "tonalRamp": [
+          "#12100e",
+          "#2a2622",
+          "#423d37",
+          "#5a544c",
+          "#726b61",
+          "#8a8276",
+          "#a2998b",
+          "#bab0a0"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "The single headline; uppercase, tracking -0.015em." },
-      "body": { "displayName": "Body", "purpose": "Lede and explanation, max 56ch." },
-      "label": { "displayName": "Label", "purpose": "Chips, legends, timestamps, card feet; mono, uppercase, 0.12em." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "The single headline; uppercase, tracking -0.015em."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Lede and explanation, max 56ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Chips, legends, timestamps, card feet; mono, uppercase, 0.12em."
+      },
+      "mark": {
+        "displayName": "Mark",
+        "purpose": "Masthead wordmark, 30px Anton."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles, 24px Anton."
+      },
+      "step-title": {
+        "displayName": "Step title",
+        "purpose": "Pipeline cards on /about, 21px Anton."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel titles, 19px Anton."
+      },
+      "card-title": {
+        "displayName": "Card title",
+        "purpose": "Repository names, 17px Anton."
+      },
+      "body-small": {
+        "displayName": "Body small",
+        "purpose": "Person and contact lines, 15px Public Sans."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Key/value rows, 14px Plex Mono with tabular numerals."
+      },
+      "card-body": {
+        "displayName": "Card body",
+        "purpose": "Descriptions, 13.5px Public Sans."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Status row, legend, n-of-m, 12.5px Plex Mono."
+      }
     },
     "shadows": [
-      { "name": "panel-lift", "value": "10px 10px 0 var(--ink)", "purpose": "Hero panels and island shells." },
-      { "name": "card-lift", "value": "6px 6px 0 var(--ink)", "purpose": "Repository cards at rest." },
-      { "name": "card-hover", "value": "9px 9px 0 var(--cobalt)", "purpose": "Card hover, combined with a -2px translate." },
-      { "name": "stamp-lift", "value": "5px 5px 0 var(--ink)", "purpose": "The rotated refresh stamp." }
+      {
+        "name": "panel-lift",
+        "value": "10px 10px 0 var(--ink)",
+        "purpose": "Hero panels and island shells."
+      },
+      {
+        "name": "card-lift",
+        "value": "6px 6px 0 var(--ink)",
+        "purpose": "Repository cards at rest."
+      },
+      {
+        "name": "card-hover",
+        "value": "9px 9px 0 var(--cobalt)",
+        "purpose": "Card hover, combined with a -2px translate."
+      },
+      {
+        "name": "stamp-lift",
+        "value": "5px 5px 0 var(--ink)",
+        "purpose": "The rotated refresh stamp."
+      }
     ],
     "motion": [
-      { "name": "card-state", "value": "120ms ease", "purpose": "Card shadow and translate on hover." }
+      {
+        "name": "ticker-scroll",
+        "value": "48s linear infinite",
+        "purpose": "The fact strip; pauses on hover or focus."
+      },
+      {
+        "name": "pulse-dot",
+        "value": "2.4s ease-out infinite",
+        "purpose": "Collector status dot."
+      },
+      {
+        "name": "rise-in",
+        "value": "460ms cubic-bezier(0.2,0.9,0.25,1)",
+        "purpose": "Card entrance, staggered 45ms, first 12 only."
+      },
+      {
+        "name": "grow",
+        "value": "520ms cubic-bezier(0.2,0.9,0.25,1)",
+        "purpose": "Language bar segments, staggered 90ms."
+      },
+      {
+        "name": "count-up",
+        "value": "900ms cubic ease-out",
+        "purpose": "Headline figures on first paint; instant under reduced motion."
+      },
+      {
+        "name": "card-hover",
+        "value": "120ms ease",
+        "purpose": "Card lift and shadow colour change."
+      }
     ],
     "breakpoints": [
-      { "name": "stack", "value": "900px" }
+      {
+        "name": "stack",
+        "value": "900px"
+      }
     ]
   },
   "components": [
@@ -61,6 +266,20 @@
       "description": "Mono rows separated by 2px rules, values right-aligned and tabular.",
       "html": "<div class=\"ds-panel\"><div class=\"ds-kv\"><span>Public repositories</span><b>25</b></div><div class=\"ds-kv\"><span>Commits recorded</span><b>7,224</b></div></div>",
       "css": ".ds-panel{border:3px solid var(--ink);background:var(--paper);box-shadow:10px 10px 0 var(--ink);padding:18px 20px}.ds-kv{display:flex;justify-content:space-between;gap:12px;border-bottom:2px solid var(--ink);padding:7px 0;font-size:14px}.ds-kv:last-child{border-bottom:0}.ds-kv b{font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "description": "Filters the index by leading language; count in brackets.",
+      "html": "<button class=\"ds-chip\" type=\"button\" data-active=\"true\">Python <b>5</b></button>",
+      "css": ".ds-chip{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;background:var(--paper);color:var(--ink);border:2px solid var(--ink);padding:5px 9px;cursor:pointer;transition:background 120ms ease,color 120ms ease,transform 120ms ease}.ds-chip b{font-weight:400;opacity:.55;margin-left:2px}.ds-chip:hover{background:var(--sun);color:var(--on-accent);transform:translateY(-1px)}.ds-chip[data-active=true]{background:var(--ink);color:var(--paper)}"
+    },
+    {
+      "name": "Fact Ticker",
+      "kind": "custom",
+      "description": "Ink strip of changeable facts, 48s loop, pauses on hover.",
+      "html": "<div class=\"ds-ticker\"><span>C++ 34%</span><i></i><span>collected hourly</span><i></i></div>",
+      "css": ".ds-ticker{display:flex;align-items:center;gap:14px;background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;overflow:hidden}.ds-ticker i{width:5px;height:5px;background:var(--sun);display:inline-block}"
     }
   ],
   "narrative": {
@@ -74,23 +293,54 @@
       "Light and dark are the same system with the paper swapped."
     ],
     "rules": [
-      { "name": "The Two Papers Rule", "body": "Panels are never white-on-white: they are paper on ground, so every block has an edge before a border is drawn.", "section": "colors" },
-      { "name": "The On-Accent Rule", "body": "Text on sunflower or tomato is always #12100e.", "section": "colors" },
-      { "name": "The Numbers Rule", "body": "Every comparable figure is set in IBM Plex Mono with tabular numerals.", "section": "typography" },
-      { "name": "The No-Blur Rule", "body": "If a shadow has a blur radius, it belongs to another design system.", "section": "elevation" }
+      {
+        "name": "The Two Papers Rule",
+        "body": "Panels are never white-on-white: they are paper on ground, so every block has an edge before a border is drawn.",
+        "section": "colors"
+      },
+      {
+        "name": "The On-Accent Rule",
+        "body": "Text on sunflower or tomato is always #12100e.",
+        "section": "colors"
+      },
+      {
+        "name": "The Numbers Rule",
+        "body": "Every comparable figure is set in IBM Plex Mono with tabular numerals.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Blur Rule",
+        "body": "If a shadow has a blur radius, it belongs to another design system.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Living Rule",
+        "body": "At least one element must be visibly changing, and it must report something true.",
+        "section": "motion"
+      },
+      {
+        "name": "The Quiet Fallback Rule",
+        "body": "prefers-reduced-motion removes every animation; the counts land immediately and the information survives.",
+        "section": "motion"
+      }
     ],
     "dos": [
       "Do keep the panel ground paper and the page ground; the contrast between them is the layout.",
       "Do use on-accent on sunflower and tomato in both themes.",
       "Do set every comparable figure in mono with tabular numerals.",
-      "Do state the refresh time; the data is up to an hour old."
+      "Do state the refresh time; the data is up to an hour old.",
+      "Do keep every motion attached to a real fact: a timestamp, a countdown, a count.",
+      "Do pause the ticker on hover and focus."
     ],
     "donts": [
       "Don't add border-radius, blur, or gradient fills.",
       "Don't put cream text on sunflower or tomato.",
       "Don't introduce a decorative element that carries no information.",
       "Don't truncate a number, a repository name, or a date.",
-      "Don't let the headline rely on a fixed width."
+      "Don't let the headline rely on a fixed width.",
+      "Don't repeat a number in the ticker, the hero and the table.",
+      "Don't animate anything that is not true.",
+      "Don't let a percentage row stop short of 100; group the remainder as Other."
     ]
   }
 }

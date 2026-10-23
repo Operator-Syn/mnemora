@@ -13,13 +13,58 @@ colors:
 typography:
   display:
     fontFamily: "Anton, Arial Narrow, sans-serif"
-    fontSize: "clamp(40px, 7.4vw, 104px)"
+    fontSize: "clamp(38px, 6.6vw, 92px)"
     fontWeight: 400
-    lineHeight: 1.04
+    lineHeight: 1.1
     letterSpacing: "-0.015em"
+  mark:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "30px"
+    fontWeight: 400
+    lineHeight: 1
+  headline:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "24px"
+    fontWeight: 400
+    lineHeight: 1.08
+  step-title:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "21px"
+    fontWeight: 400
+    lineHeight: 1.08
+  title:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "19px"
+    fontWeight: 400
+    lineHeight: 1.08
+  card-title:
+    fontFamily: "Anton, Arial Narrow, sans-serif"
+    fontSize: "17px"
+    fontWeight: 400
+    lineHeight: 1.08
   body:
     fontFamily: "Public Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "18px"
+    fontWeight: 400
+    lineHeight: 1.5
+  body-small:
+    fontFamily: "Public Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "15px"
+    fontWeight: 400
+    lineHeight: 1.5
+  data:
+    fontFamily: "IBM Plex Mono, ui-monospace, monospace"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.4
+  card-body:
+    fontFamily: "Public Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "13.5px"
+    fontWeight: 400
+    lineHeight: 1.55
+  note:
+    fontFamily: "IBM Plex Mono, ui-monospace, monospace"
+    fontSize: "12.5px"
     fontWeight: 400
     lineHeight: 1.5
   label:
@@ -119,11 +164,23 @@ and a typewriter face for anything that is measured. The contrast between the th
 
 ### Hierarchy
 
-- **Display** (400, clamp(40px, 7.4vw, 104px), 1.04): the headline only. Uppercase, tracking -0.015em.
-- **Headline** (400, 19–24px, 1.08): panel and section titles. Same face, small.
-- **Body** (400/600, 18px, 1.5, max 56ch): the lede and any explanation.
-- **Card body** (400, 12.5px, 1.45): repository descriptions.
-- **Label** (400, 11.5px, 0.12em, uppercase): masthead chips, legends, timestamps, card feet.
+Every step below is a real value in `src/styles.css`; the audit flags any size that is not on this
+list, so add a row here before adding one there.
+
+| step | size | face | use |
+|---|---|---|---|
+| Display | clamp(38px, 6.6vw, 92px), 1.1 | Anton | the page headline, one per page |
+| Mark | 30px, 1 | Anton | masthead wordmark |
+| Headline | 24px, 1.08 | Anton | section titles (`Public repositories`) |
+| Step title | 21px, 1.08 | Anton | the four pipeline cards on /about |
+| Title | 19px, 1.08 | Anton | panel titles (`By the numbers`) |
+| Card title | 17px, 1.08 | Anton | repository name |
+| Body | 18px, 1.5, 56ch max | Public Sans | the lede |
+| Body small | 15px, 1.5 | Public Sans | the "who runs it" lines |
+| Data | 14px, 1.4 | Plex Mono | key/value rows, tabular numerals |
+| Card body | 13.5px, 1.55 | Public Sans | descriptions, limit list items |
+| Note | 12.5px, 1.5 | Plex Mono | status row, legend, `n of m shown` |
+| Label | 11.5px, 0.12em | Plex Mono | chips, brows, ticker, timestamps, card feet |
 
 **The Numbers Rule.** Every number that a reader might compare is set in IBM Plex Mono with
 `font-variant-numeric: tabular-nums`. Proportional digits are a bug in a data surface.
@@ -183,11 +240,54 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **Behaviour:** cycles Auto → Light → Dark, writes `data-theme` on `<html>` and persists to
   `localStorage.theme`; Auto follows `prefers-color-scheme`.
 
+### Ticker
+
+A full-bleed ink strip under the masthead carrying facts that change: the leading language shares,
+`collected hourly`, the pipeline order, and minutes to the next pass. It scrolls on a 48-second loop
+and pauses on hover or focus. Hidden entirely when reduced motion is requested — the same facts are
+in the panels below, so nothing is lost.
+
+### Status row
+
+`● Collector active — next pass in 52 min — 25 repos · 20 languages tracked` in 12.5px mono. The dot
+pulses on a 2.4s cycle. Minutes are computed on the server so the HTML and the hydrated client agree.
+
+### Chips
+
+Filter the repository index by leading language. Square, 2px ink border, mono 11.5px, count in
+brackets. Hover fills sunflower; the active chip inverts to ink. The count beside `n of m shown` is
+`aria-live="polite"`, so filtering announces itself.
+
+### Brows
+
+`01 ▸ THE LEDGER` above each band: a mono label with the number reversed out of an ink block and a
+hairline running to the right margin. Used on `/about` as well (store, pipeline, limits).
+
 ### Navigation
 
 Masthead: wordmark set in Anton, split across ink and a tomato block ("Mne" ink, "mora" on tomato), a sunflower chip
 dating the collection, then uppercase links with a 3px ink underline on hover and sunflower highlight
 on the active route. Hidden below 900px.
+
+## Motion & Cadence
+
+The page must look like it is running. Motion here is evidence, not decoration: something is always
+either moving, counting, or counting down, and every one of those signals a real fact.
+
+- **Entrance:** cards rise 10px and fade over 460ms, staggered 45ms each, first 12 only. Runs once.
+- **Count-up:** the two headline figures count from zero over 900ms on first paint.
+- **Bars:** language segments grow from their left edge, staggered 90ms.
+- **Ticker:** 48s linear loop, paused on hover/focus.
+- **Pulse:** the collector dot breathes on a 2.4s cycle.
+- **Hover:** cards lift 2px-left/-2px-up with the shadow turning cobalt; the card's language bar
+  goes from 50% to full opacity; chips lift 1px.
+
+**The Living Rule.** At least one element on the page must be visibly changing, and it must be
+reporting something true — a timestamp, a countdown, a count. Motion that reports nothing is noise.
+
+**The Quiet Fallback Rule.** `prefers-reduced-motion: reduce` removes every animation and transition
+on these elements, and the counts land on their final value immediately. The information survives;
+only the movement goes.
 
 ## Do's and Don'ts
 
@@ -207,3 +307,6 @@ on the active route. Hidden below 900px.
   the refresh stamp for exactly this reason.
 - **Don't** truncate a number, a repository name, or a date; wrap instead.
 - **Don't** let the headline rely on a fixed width; it must wrap, not clip, at any viewport.
+- **Don't** repeat the same number in the ticker, the hero and the table; each surface says it once.
+- **Don't** animate anything that is not true — no fake activity, no skeleton shimmer over loaded data.
+- **Don't** let a percentage row stop short of 100; group the remainder as Other.
