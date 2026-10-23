@@ -28,6 +28,8 @@ function applyThemeMode(mode: ThemeMode) {
     document.documentElement.setAttribute('data-theme', mode)
   }
 
+  document.documentElement.dataset.themeMode = mode
+
   document.documentElement.style.colorScheme = resolved
 }
 
@@ -75,7 +77,11 @@ export default function ThemeToggle() {
       title={label}
       className="theme-toggle"
     >
-      {mode === 'auto' ? 'Auto' : mode === 'dark' ? 'Dark' : 'Light'}
+      {/* Same trick as the motion control: the server cannot know the stored mode, so all three
+          labels are in the HTML and html[data-theme-mode] decides which one is visible. */}
+      <span data-mode="auto">Auto</span>
+      <span data-mode="light">Light</span>
+      <span data-mode="dark">Dark</span>
     </button>
   )
 }
