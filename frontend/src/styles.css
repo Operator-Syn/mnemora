@@ -528,9 +528,171 @@ a {
 
 /* Responsive ---------------------------------------------------------------- */
 
+
+/* About — Read register ------------------------------------------------------
+   The poster steps back here: the pipeline is a sequence, so the steps are
+   numbered and set as columns, and the argument is carried by type, not colour.
+   --------------------------------------------------------------------------- */
+
+.about-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  align-items: start;
+  margin-bottom: 30px;
+}
+
+.about-counts {
+  margin: 0;
+}
+
+.who {
+  background: var(--cobalt);
+  color: var(--cream);
+}
+
+.who h2 {
+  color: var(--cream);
+}
+
+.who .who-line {
+  color: var(--cream);
+}
+
+.who .who-line a {
+  color: var(--cream);
+  border-bottom-color: var(--sun);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 30px;
+}
+
+.step {
+  border: var(--rule);
+  background: var(--paper);
+  box-shadow: 6px 6px 0 var(--ink);
+  padding: 16px 18px 14px;
+}
+
+.step-num {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  background: var(--sun);
+  color: var(--on-accent);
+  border: var(--rule-2);
+  padding: 1px 7px;
+  margin-bottom: 10px;
+}
+
+.step h2 {
+  font-family: var(--font-display);
+  font-size: 21px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+}
+
+.step p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 1100px) {
+  .steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .about-top {
+    grid-template-columns: 1fr;
+  }
+}
+
+.limits {
+  margin-bottom: 22px;
+}
+
+.limits ul {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 10px 34px;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 900px) {
+  .limits ul {
+    grid-template-columns: 1fr;
+  }
+}
+
+.limits li {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.who-line {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.who-line a {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 3px solid var(--sun);
+}
+
+.who-line a:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.contact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.contact-link {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--rule-2);
+  padding: 7px 12px;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.who .contact-link {
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.contact-link:hover {
+  background: var(--cobalt);
+  color: var(--cream);
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
 @media (max-width: 900px) {
   .poster-grid,
-  .cards {
+  .cards,
+  .steps,
+  .about-top {
     grid-template-columns: 1fr;
   }
 
