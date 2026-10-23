@@ -319,10 +319,9 @@ read "7,2247,224". The reservation is layout, not content.
 query, and lands on its final value immediately when motion is off. A visitor who stopped motion does
 not get a page that still counts at them.
 - **Section rules** — brows draw their hairline across on first view (460ms, 100ms delay).
-- **Card entrance** — 10px rise with 45ms stagger, first 12 only, and it plays when the grid
-  *arrives*, not when the document parses: the grid carries `data-deal`, the observer marks it
-  `data-in`, and the cards animate from that. Previously all 25 animated while still below the fold,
-  so the one moment the reader could have seen them was the one moment they were finished.
+- **Card entrance** — 10px rise with 45ms stagger, first 12 only, and it plays with the page, not
+  with the scrollbar. It used to wait for the grid to enter the viewport, so a reader who scrolled
+  down watched already-loaded content fade and rise — indistinguishable from a second load.
 - **The stack** — every segment is at its true width in every frame; the whole bar prints up
   (opacity 0.25 → 1 over 420ms). It used to grow segment by segment with a 90ms stagger, and any
   glance during that second read the unfilled track as unlabelled data.
@@ -346,6 +345,11 @@ bytes belong to nothing.
 keeps applying its final transform, and an active animation outranks a transition on the same
 property — which silently disables every hover transform on the element for the life of the page.
 
+**The Loaded Content Rule.** Content that has already been loaded never animates in again. Reveals
+are part of the page's arrival — one beat, on mount, whether or not a block is on screen — never a
+scroll event. A fade-and-rise on content the reader can already read is the same visual grammar as
+loading, so it says "loading" while showing a finished page.
+
 **The One Arrival Rule.** A page arrives the same way whether you navigated to it or reloaded it.
 Navigation gets that from the view transition (`page-lift` out, `page-register` in); a refresh has no
 old page to lift, so `<main>` runs `page-register` itself. Every entrance inside then waits 300ms —
@@ -367,8 +371,9 @@ entrances because leaving should not be something you wait for.
 **The Pre-Paint Rule.** Anything that changes what the first frame looks like is decided in the
 inline script, before the document paints: the theme class, `data-motion`, `data-motion-mode`, and
 `motion-ready`. A state that arrives after hydration is not a detail — it is a visible restart. The
-reveal class used to be added in an effect, so sections painted visible and were then hidden and
-re-animated ~120ms later; three transitions were cancelled and the page blinked on every load.
+reveal used to be class-gated and driven by an observer, which had two failure modes: sections
+painted visible and were then hidden ~120ms later on load, and already-loaded sections animated in
+again when scrolled to.
 
 **The Label Rule.** The server cannot know a stored preference, so it must not render one. Each
 toggle ships *all* of its labels in the HTML and `html[data-theme-mode]` / `html[data-motion-mode]`
@@ -408,7 +413,7 @@ true — the cycle gauge, the countdown, the pulse. Motion that reports nothing 
 **The Quiet Fallback Rule.** Motion off removes every animation and every transition (measured: 46
 animations at rest, 0 with motion off, 0 when the OS asks for reduce and the control is on `sys`) while the counts, the gauge, and the countdown keep their values.
 Content is never hidden behind motion: reveal targets start visible and only animate once JavaScript
-adds `motion-ready`.
+decides every entrance at parse time.
 
 **The Footer Rule.** The document is a column at least one viewport tall (`body { min-height: 100dvh;
 display: flex; flex-direction: column }`, `main { flex: 1 0 auto }`). A short page — a 404, an empty
