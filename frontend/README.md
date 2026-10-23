@@ -110,7 +110,7 @@ There are three different things that can hand you stale UI, and only one of the
 | what you see | what it is | fix |
 |---|---|---|
 | The Worker on `:8787` dies or serves a bundle that no longer exists | `npm run build` rewrites `dist/` underneath a running `wrangler dev`; it prints "Reloading local server..." and stops answering | `npm run dev:worker` — it stops the old server, builds, then starts |
-| Old modules in the Vite dev server on `:3000` | `node_modules/.vite` transform cache after big edits | `npm run dev:fresh` |
+| Old modules in the Vite dev server on `:3000` | the running server's in-memory module graph, or `node_modules/.vite` after big dependency edits — a refresh revalidates modules (`no-cache` + ETag), so if a refresh does not change the page, the tab is running JS it loaded earlier | `npm run dev:fresh`, then close the tab and reopen it |
 | The tab shows a page you already replaced | browser HTTP cache | hard reload (`Ctrl+Shift+R`) |
 
 ```sh
