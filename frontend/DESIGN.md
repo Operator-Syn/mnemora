@@ -390,6 +390,18 @@ explicit choice only — choosing `sys` clears it). The OS preference is a defau
 a visitor who runs a reduced-motion desktop may still want the page to move, and one with no OS
 preference may want it still.
 
+**The Honest Skeleton Rule.** A loading state may only describe a wait that is really happening. The
+skeleton is empty structure — ruled placeholders, no invented numbers, no shimmer — under a label that
+says what the page is doing (`Reading the index`). It appears after 200ms so a warm navigation never
+flashes it, stays at least 400ms so it reads as a state rather than a flicker, and its indeterminate
+rule is the only thing that moves; with motion off the rule is static and the information survives.
+
+Declared as `pendingComponent` on both routes and as `defaultPendingComponent`, the router never
+committed a pending match in this version while a server-function loader was in flight (measured: 1.2s
+of `isLoading` with no pending match). `RoutePendingVeil` therefore drives the same component from
+`router.state.isLoading`, which is reliable, and covers the page instead of replacing the outlet so
+the outgoing route keeps its DOM for the view transition.
+
 **The Living Rule.** At least one element must be visibly changing, and it must be reporting something
 true — the cycle gauge, the countdown, the pulse. Motion that reports nothing is noise.
 
