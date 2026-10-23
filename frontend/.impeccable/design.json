@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T16:10:00+08:00",
+  "generatedAt": "2026-10-23T16:35:00+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -291,6 +291,14 @@
       "description": "Cycles Motion: sys, on, off. Writes html[data-motion] plus data-motion-mode and persists the explicit choice to localStorage.motion; sys follows the OS setting.",
       "html": "<button class=\"ds-toggle\" type=\"button\">Auto</button>",
       "css": ".ds-toggle{font-family:var(--font-mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;background:var(--paper);color:var(--ink);border:2px solid var(--ink);padding:5px 9px;cursor:pointer}.ds-toggle:hover{background:var(--cobalt);color:var(--cream)}.ds-toggle:focus-visible{outline:3px solid var(--cobalt);outline-offset:2px}"
+    },
+    {
+      "name": "Route Pending",
+      "kind": "custom",
+      "refersTo": "route-pending",
+      "description": "Skeleton shown while a route loader fetches the index: status line, indeterminate rule, headline and card placeholders. Driven by router.state.isLoading.",
+      "html": "<div class=\"ds-pending\"><p class=\"ds-pending-status\">Reading the index</p><div class=\"ds-pending-rail\"><i></i></div><div class=\"ds-pending-card\"><i></i><i></i></div></div>",
+      "css": ".ds-pending{display:grid;gap:18px}.ds-pending-status{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}.ds-pending-rail{height:6px;background:color-mix(in srgb,var(--ink) 12%,transparent);overflow:hidden}.ds-pending-rail i{display:block;height:100%;width:34%;background:var(--ink)}.ds-pending-card{border:3px solid var(--ink);background:var(--paper);box-shadow:6px 6px 0 var(--shadow-solid);display:grid;gap:10px;padding:18px 16px}.ds-pending-card i{display:block;height:10px;background:color-mix(in srgb,var(--ink) 12%,var(--paper))}"
     }
   ],
   "narrative": {
@@ -377,6 +385,11 @@
       {
         "name": "The One Arrival Rule",
         "body": "A page arrives the same way by navigation or reload: page-register carries the first 300ms on both paths, and every entrance starts on the same beat after it.",
+        "section": "motion"
+      },
+      {
+        "name": "The Honest Skeleton Rule",
+        "body": "A loading state describes a wait that is really happening: ruled placeholders and no invented content, a label naming the action, 200ms before showing and 400ms minimum on screen, and a single motion-gated indeterminate rule.",
         "section": "motion"
       }
     ],
