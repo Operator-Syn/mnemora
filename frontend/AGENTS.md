@@ -74,8 +74,9 @@ Load in this order, and only what the task needs:
   before the route hydrated, and React then compared the marked DOM against HTML that never carried
   the attribute — "A tree hydrated but some attributes … didn't match". React must own anything that
   appears in markup: the observer returns state and the JSX renders `data-in`.
-- **Motion is gated.** Every animation sits inside `@media (prefers-reduced-motion: no-preference)`.
-  Reveal targets start visible; only `html.motion-ready` (added by JS) hides-then-animates.
+- **Motion is gated.** Every animation gates on `html[data-motion='on']`, resolved before first paint.
+  Entrances are mount-time CSS animations, not scroll events: revealing on scroll made already-loaded
+  sections animate again, which reads as a second load.
 - **Colour comes from tokens.** Bright fills (sun, tomato) use `--on-accent`, never `--cream`, and
   contrast is measured from computed styles — the design detector does not resolve `var()`.
 
