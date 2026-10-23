@@ -333,9 +333,13 @@ function Home() {
                   <h2>Language mix / bytes</h2>
                   <div className="stack stack-live" data-focus={focusedLanguage ? '' : undefined}>
                     {data.languages.map((entry, index) => (
+                      // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only cross-highlight; the share is written in the legend and in the title.
                       <i
                         key={entry.name}
                         data-on={focusedLanguage === entry.name ? '' : undefined}
+                        title={`${entry.name} · ${(entry.share * 100).toFixed(0)}%`}
+                        onMouseEnter={() => setFocusedLanguage(entry.name)}
+                        onMouseLeave={() => setFocusedLanguage(null)}
                         style={{
                           width: `${entry.share * 100}%`,
                           background: STACK_COLOURS[index % STACK_COLOURS.length],
@@ -343,8 +347,12 @@ function Home() {
                       />
                     ))}
                     {otherTotal > 0.005 && (
+                      // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only cross-highlight; the share is written in the legend and in the title.
                       <i
                         data-on={focusedLanguage === 'Other' ? '' : undefined}
+                        title={`Other · ${(otherTotal * 100).toFixed(0)}%`}
+                        onMouseEnter={() => setFocusedLanguage('Other')}
+                        onMouseLeave={() => setFocusedLanguage(null)}
                         style={{
                           width: `${otherTotal * 100}%`,
                           background: OTHER_COLOUR,
