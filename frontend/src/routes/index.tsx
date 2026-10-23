@@ -27,6 +27,15 @@ const STACK_COLOURS = [
   '#0f6b5c',
 ]
 
+/** STACK_COLOURS[6] is the neutral "other" swatch used by the legend. */
+const OTHER_COLOUR = STACK_COLOURS[6]
+
+function languageColour(name: string, ranked: ReadonlyArray<{ name: string }>): string {
+  const index = ranked.findIndex((entry) => entry.name === name)
+  if (index === -1) return OTHER_COLOUR
+  return STACK_COLOURS[index % STACK_COLOURS.length]
+}
+
 function formatDate(value: string | null): string {
   if (!value) return 'never'
   const date = new Date(value)
@@ -35,6 +44,12 @@ function formatDate(value: string | null): string {
   if (minutes < 60) return `${minutes} min ago`
   if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`
   return date.toISOString().slice(0, 10)
+}
+
+/** Cards always print a calendar date; relative time is the panel's job. */
+function formatIsoDate(value: string | null): string {
+  if (!value) return 'never'
+  return new Date(value).toISOString().slice(0, 10)
 }
 
 function dominantLanguage(repo: Repository): string | null {
@@ -396,7 +411,9 @@ function Home() {
                         className="card rise"
                         style={{ animationDelay: `${Math.min(index, 11) * 45}ms` }}
                       >
-                        <span className="card-tag">{repo.commit_count ?? 0}</span>
+                        <span className="card-tag" title={`${repo.commit_count ?? 0} commits`}>
+                      {repo.commit_count ?? 0}
+                    </span>
                         <h3>
                           <a
                             href={repo.html_url}
@@ -412,21 +429,16 @@ function Home() {
                           {langs.map(([name, bytes]) => (
                             <i
                               key={name}
+                              title={`${name} · ${Math.round((bytes / totalBytes) * 100)}%`}
                               style={{
                                 width: `${(bytes / totalBytes) * 100}%`,
-                                background:
-                                  STACK_COLOURS[
-                                    Math.max(
-                                      0,
-                                      data.languages.findIndex((entry) => entry.name === name),
-                                    ) % STACK_COLOURS.length
-                                  ],
+                                background: languageColour(name, data.languages),
                               }}
                             />
                           ))}
                         </div>
                         <div className="card-foot">
-                          <span>{formatDate(repo.pushed_at_utc)}</span>
+                          <span>{formatIsoDate(repo.pushed_at_utc)}</span>
                           <span>{repo.archived ? 'archived' : (dominantLanguage(repo) ?? 'no index')}</span>
                         </div>
                       </article>
