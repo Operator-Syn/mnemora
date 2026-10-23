@@ -42,4 +42,18 @@ if [ "$count" -ne 1 ]; then
   exit 1
 fi
 
-exit 0
+# Then Biome, on the one staged path. Pinned to the version biome.json targets, so the gate
+# cannot change behaviour because a newer release was published overnight.
+#
+# --write fixes in the working tree, which would leave the commit holding the unfixed bytes;
+# re-adding keeps what was fixed and what is committed the same file. The command's exit code
+# is the hook's, so a remaining error fails the commit.
+biome_version=$(sed -n 's/.*biomejs.dev\/schemas\/\([0-9][0-9.]*\)\/schema.json.*/\1/p' biome.json)
+if [ -z "$biome_version" ]; then
+  biome_version=2.4.15
+fi
+
+npx --yes "@biomejs/biome@$biome_version" check --write --no-errors-on-unmatched \
+  --files-max-size=2097152 "$staged"
+
+git add -- "$staged"
