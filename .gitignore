@@ -5,5 +5,9 @@ workflows/*/.env
 __pycache__/
 *.pyc
 
+# Agent-local state: registration is committed, per-developer settings are not.
+.claude/settings.local.json
+.claude/*.local.json
+
 # Backup dumps contain the product database. They are gitignored above; this note exists
 # because gitignore does not control file modes. chmod 600 after every pg_dump.
