@@ -398,7 +398,12 @@ function Home() {
                       >
                         <span className="card-tag">{repo.commit_count ?? 0}</span>
                         <h3>
-                          <a href={repo.html_url} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={repo.html_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={repo.full_name}
+                          >
                             {repo.full_name.split('/')[1]}
                           </a>
                         </h3>
