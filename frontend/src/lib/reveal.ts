@@ -43,7 +43,7 @@ export function useInView<T extends HTMLElement = HTMLDivElement>() {
     const safety = window.setTimeout(() => {
       const rect = node.getBoundingClientRect()
       if (rect.top < window.innerHeight && rect.bottom > 0) setInView(true)
-    }, 1200)
+    }, 600)
 
     return () => {
       observer.disconnect()
