@@ -6,6 +6,8 @@ import Header from '../components/Header'
 
 import appCss from '../styles.css?url'
 
+const MOTION_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('motion');var mode=(stored==='on'||stored==='off')?stored:'system';var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;var resolved=mode==='on'?'on':mode==='off'?'off':(reduce?'off':'on');var root=document.documentElement;root.dataset.motion=resolved;root.dataset.motionMode=mode;}catch(e){}})();`
+
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('theme');var mode=(stored==='light'||stored==='dark'||stored==='auto')?stored:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');root.classList.add(resolved);if(mode==='auto'){root.removeAttribute('data-theme')}else{root.setAttribute('data-theme',mode)}root.style.colorScheme=resolved;}catch(e){}})();`
 
 export const Route = createRootRoute({
@@ -65,6 +67,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: runs before first paint so the stored theme applies without a flash; a module script would paint the wrong theme first. */}
       <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the motion mode has to be on <html> before first paint, or the page moves once and then stops. */}
+        <script dangerouslySetInnerHTML={{ __html: MOTION_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[rgba(79,184,178,0.24)]">
