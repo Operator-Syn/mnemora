@@ -6,6 +6,21 @@ const SHOW_AFTER_MS = 200
 const MIN_VISIBLE_MS = 400
 
 /**
+ * A refresh the page started for itself — the hourly re-read of the index — is not a navigation the
+ * reader asked for, so it must not throw a full-page "Reading the index" veil over what they are
+ * reading. This counts those requests in flight; the veil stays out of the way while any is open.
+ */
+let backgroundRefreshes = 0
+
+export function markBackgroundRefreshStart() {
+  backgroundRefreshes += 1
+}
+
+export function markBackgroundRefreshEnd() {
+  backgroundRefreshes = Math.max(0, backgroundRefreshes - 1)
+}
+
+/**
  * Shows the skeleton while the router is loading.
  *
  * Why not `pendingComponent`: the router documents a pending match for exactly this, and it is
@@ -23,6 +38,11 @@ export default function RoutePendingVeil() {
   const shownAt = useRef(0)
 
   useEffect(() => {
+    if (backgroundRefreshes > 0) {
+      setVisible(false)
+      return
+    }
+
     if (isLoading) {
       const timer = window.setTimeout(() => {
         shownAt.current = Date.now()
