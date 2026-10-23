@@ -260,6 +260,26 @@ a {
   margin-right: 0.06em;
 }
 
+/* The settled figure holds the width as hidden pseudo-content; the live figure rides on top. A
+   number that counts must not move the words around it, and the reservation must not appear twice
+   in the DOM — pseudo-element text is invisible to selection, copy and the accessibility tree. */
+.tally {
+  position: relative;
+  display: inline-block;
+}
+
+.tally::before {
+  content: attr(data-final);
+  visibility: hidden;
+}
+
+.tally-live {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+}
+
 .poster h1 .hl.alt {
   background: var(--ink);
   color: var(--paper);
