@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T14:55:00+08:00",
+  "generatedAt": "2026-10-23T15:15:00+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -363,6 +363,16 @@
         "name": "The Counting Figure Rule",
         "body": "A figure that animates must not change its own width: the settled string is reserved as hidden pseudo-content, so the digits change inside a fixed box and the line never rewraps.",
         "section": "typography"
+      },
+      {
+        "name": "The Pre-Paint Rule",
+        "body": "Anything that changes the first frame is decided in the inline script before paint: theme class, data-motion, data-motion-mode and motion-ready. State that arrives after hydration is a visible restart.",
+        "section": "motion"
+      },
+      {
+        "name": "The Label Rule",
+        "body": "The server cannot know a stored preference, so it must not render one label: every toggle ships all its labels and an html[data-*-mode] attribute decides which is visible.",
+        "section": "components"
       }
     ],
     "dos": [
