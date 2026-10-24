@@ -458,6 +458,7 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
    fact a reader wants before trusting the numbers. */
 .stamp {
   position: absolute;
+  isolation: isolate;
   top: 14px;
   right: 18px;
   transform: rotate(-2.5deg);
@@ -473,6 +474,40 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
   white-space: nowrap;
 }
 
+/* Two registration plates stutter at random intervals without moving the timestamp. */
+.stamp-overprint {
+  display: none;
+  position: absolute;
+  z-index: -1;
+  inset: -3px;
+  pointer-events: none;
+}
+
+.stamp-overprint::before,
+.stamp-overprint::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid var(--cobalt);
+  opacity: 0;
+}
+
+.stamp-overprint::after {
+  border-color: var(--sun);
+}
+
+html[data-motion='on'] .stamp-overprint {
+  display: block;
+}
+
+html[data-motion='on'] .stamp-overprint::before {
+  animation: stamp-overprint-plate 1350ms steps(1, end);
+}
+
+html[data-motion='on'] .stamp-overprint::after {
+  animation: stamp-overprint-plate 1350ms steps(1, end) 150ms;
+}
+
 /* Two panels ---------------------------------------------------------------- */
 
 .poster-grid {
@@ -483,10 +518,53 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
 }
 
 .panel {
+  position: relative;
   border: var(--rule);
   background: var(--paper);
   box-shadow: var(--shadow);
   padding: 18px 20px;
+}
+
+/* A heavy tomato registration stroke repeats on the panels' top ink rule, not through the figures. */
+.panel::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -3px;
+  right: -3px;
+  left: -3px;
+  height: 6px;
+  background: var(--tomato);
+  transform: scaleX(0);
+  transform-origin: left center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html[data-motion='on'] .poster-grid > .panel::before {
+  animation: panel-register-pass 3.6s linear infinite;
+}
+
+html[data-motion='on'] .poster-grid > .panel:nth-child(2)::before {
+  animation-delay: -1.8s;
+}
+
+@keyframes panel-register-pass {
+  0%,
+  6% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  18%,
+  22% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  30%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
 }
 
 .panel h2 {
@@ -517,12 +595,68 @@ html:not([data-motion-mode='on']):not([data-motion-mode='off'])
 }
 
 .stack {
+  position: relative;
+  container-type: inline-size;
+  isolation: isolate;
   display: flex;
   height: 26px;
   border: var(--rule);
   margin: 2px 0 14px;
   overflow: hidden;
   background: var(--paper);
+}
+
+/* The near-white source flips against each segment via difference blending, so the scan stays legible. */
+.stack-scan {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  pointer-events: none;
+  background: var(--paper);
+  mix-blend-mode: difference;
+  transform: translateX(-8px);
+  opacity: 0;
+}
+
+:root[data-theme='dark'] .stack-live .stack-scan {
+  background: var(--ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .stack-live .stack-scan {
+    background: var(--ink);
+  }
+}
+
+html[data-motion='on'] .stack-live .stack-scan {
+  animation: stack-registration-sweep 2.5s linear infinite;
+}
+
+html[data-motion='on'] .stack-live[data-focus] .stack-scan {
+  animation-play-state: paused;
+  visibility: hidden;
+}
+
+@keyframes stack-registration-sweep {
+  0% {
+    transform: translateX(-8px);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  52% {
+    transform: translateX(calc(100cqw - 8px));
+    opacity: 1;
+  }
+  56%,
+  100% {
+    transform: translateX(calc(100cqw + 8px));
+    opacity: 0;
+  }
 }
 
 .stack i {
@@ -1460,6 +1594,43 @@ html[data-motion='on'] .brow::after {
   }
 }
 
+@keyframes stamp-overprint-plate {
+  0%,
+  6% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10%,
+  22% {
+    transform: translate(-12px, 6px);
+    opacity: 1;
+  }
+  28%,
+  40% {
+    transform: translate(10px, -7px);
+    opacity: 1;
+  }
+  46%,
+  58% {
+    transform: translate(-6px, -10px);
+    opacity: 1;
+  }
+  64%,
+  76% {
+    transform: translate(7px, 6px);
+    opacity: 1;
+  }
+  82%,
+  92% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+}
+
 @keyframes ink-register {
   from {
     clip-path: inset(0 100% 0 0);
@@ -1479,9 +1650,37 @@ html[data-motion='on'] .brow::after {
   overflow: hidden;
 }
 
+/* The measured fill is already true on the server; the sheet itself registers into view on arrival. */
+html[data-motion='on'] .cycle {
+  animation: cycle-gauge-register 520ms cubic-bezier(0.16, 1, 0.3, 1) 300ms backwards;
+}
+
+@keyframes cycle-gauge-register {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* The tail catches the head at the hour boundary: a paper sweep crosses the filled span so the
+   gauge empties from the left while the head exits at the right, instead of travelling back. */
+.cycle::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background: var(--paper);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
 .cycle::after {
   content: '';
   position: absolute;
+  z-index: 2;
   inset: 0;
   pointer-events: none;
   background: repeating-linear-gradient(90deg, transparent 0 14px, var(--ink) 14px 16px);
@@ -1512,7 +1711,7 @@ html[data-motion='on'] .brow::after {
 
 .cycle b {
   position: absolute;
-  z-index: 1;
+  z-index: 3;
   top: -1px;
   bottom: -1px;
   left: calc(var(--progress, 0) * 100%);
@@ -1946,6 +2145,35 @@ html[data-motion='on'] .cycle b {
   transition: left 1000ms linear;
 }
 
+html[data-motion='on'] .cycle[data-phase='draining']::before,
+html[data-motion='on'] .cycle[data-phase='exiting']::before {
+  animation: cycle-tail-catch 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+html[data-motion='on'] .cycle[data-phase='exiting'] b {
+  animation: cycle-head-exit 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* The whole printed sheet leaves to the right, then the next one prints in from the left. */
+html[data-motion='on'] .cycle[data-phase='exiting'] {
+  animation: cycle-print-exit 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+html[data-motion='on'] .cycle[data-phase='entering'] {
+  animation: cycle-print-enter 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* The reprint is a sheet change, not a fill travel: while the sheet is hidden at the hand-off,
+   the new hour's progress is painted with no transition so the head cannot cross back. */
+html[data-motion] .cycle[data-phase='draining'] i,
+html[data-motion] .cycle[data-phase='draining'] b,
+html[data-motion] .cycle[data-phase='exiting'] i,
+html[data-motion] .cycle[data-phase='exiting'] b,
+html[data-motion] .cycle[data-phase='entering'] i,
+html[data-motion] .cycle[data-phase='entering'] b {
+  transition: none;
+}
+
 html[data-motion='off'] .cycle::after {
   animation: none;
 }
@@ -1957,6 +2185,50 @@ html[data-motion='off'] .cycle i::after {
 @keyframes cycle-ink-run {
   to {
     background-position: 28px 0;
+  }
+}
+
+/* The tail crosses the span the head actually reached. */
+@keyframes cycle-tail-catch {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(var(--drain-from, 1));
+  }
+}
+
+/* The head holds at the measured edge while the tail arrives, then leaves over the right edge. */
+@keyframes cycle-head-exit {
+  0%,
+  40% {
+    left: calc(var(--drain-from, 1) * 100%);
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+  100% {
+    left: calc(var(--drain-from, 1) * 100%);
+    opacity: 0;
+    transform: translateX(calc(-50% + 6px));
+  }
+}
+
+/* The printed sheet leaves to the right, then the next one prints in from the left. */
+@keyframes cycle-print-exit {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 100%);
+  }
+}
+
+@keyframes cycle-print-enter {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
   }
 }
 
