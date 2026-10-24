@@ -501,7 +501,7 @@ bytes belong to nothing.
   removed fact ticker: one element that keeps counting, and it counts something true.
 - **Randomized overprint** — while the stamp is visible and Motion is on, two square cobalt and
   sunflower plates stutter through four offsets behind the stationary tomato stamp, then align
-  (1.35s each, the second 150ms behind). A random 8–18s pause separates bursts; this is print-register
+  (1.35s each, the second 150ms behind). A random 5–12s pause separates bursts; this is print-register
   texture, not a refresh signal, and the age text never moves or gets occluded. It stops offscreen,
   while the tab is hidden, or with Motion off.
 
