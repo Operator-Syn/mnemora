@@ -6,6 +6,12 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "mnemora-web",
 	"compatibility_date": "2026-10-19",
+	"routes": [
+		{
+			"pattern": "mnemora.syn-forge.com",
+			"custom_domain": true
+		}
+	],
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
