@@ -39,7 +39,9 @@
       "!!frontend/.tanstack",
       "!!frontend/node_modules",
       "!!frontend/.intent",
-      "!!frontend/.agents"
+      "!!frontend/.agents",
+      "!!.agents/skills/impeccable",
+      "!!.claude/skills/impeccable"
     ]
   },
   "css": {
