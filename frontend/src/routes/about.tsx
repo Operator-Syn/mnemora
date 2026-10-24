@@ -1,10 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
+import {
+  FeedComponentFailure,
+  FeedRetryButton,
+  feedFailureCopy,
+} from '../components/FeedFailure'
 import { getRepositoryIndex } from '../lib/mnemora'
 
 export const Route = createFileRoute('/about')({
   // Same server function as the home page: the numbers here are read, not typed.
   loader: () => getRepositoryIndex(),
   component: About,
+  errorComponent: () => <AboutLoadError />,
 })
 
 const CONTACT = [
@@ -40,7 +46,7 @@ const LIMITS = [
 ]
 
 function formatDate(value: string | null): string {
-  if (!value) return 'never'
+  if (!value) return 'not recorded'
   const date = new Date(value)
   const minutes = Math.round((Date.now() - date.getTime()) / 60000)
   if (minutes < 1) return 'just now'
@@ -50,9 +56,8 @@ function formatDate(value: string | null): string {
 }
 
 function About() {
-
   const data = Route.useLoaderData()
-  const hasNumbers = data.ok && data.repositories.length > 0
+  const feedCopy = feedFailureCopy(data.kind)
 
   return (
     <main className="page-wrap">
@@ -76,7 +81,7 @@ function About() {
         </div>
 
         <div className="about-top" data-reveal>
-          {hasNumbers && (
+          {data.ok ? (
             <div className="panel about-counts">
               <h2>What is in the store right now</h2>
               <div className="kv">
@@ -95,6 +100,16 @@ function About() {
                 <span>Last successful run</span>
                 <b>{formatDate(data.refreshedAt)}</b>
               </div>
+            </div>
+          ) : (
+            <div className="panel about-counts">
+              <h2>What is in the store right now</h2>
+              <FeedComponentFailure
+                code={feedCopy.code}
+                headline="Counts unavailable"
+                detail={`${feedCopy.summary} ${feedCopy.detail}`}
+              />
+              <FeedRetryButton />
             </div>
           )}
 
@@ -157,6 +172,29 @@ function About() {
               <li key={limit}>{limit}</li>
             ))}
           </ul>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function AboutLoadError() {
+  const copy = feedFailureCopy('api')
+
+  return (
+    <main className="page-wrap repo-page">
+      <section className="repo-state repo-state--unavailable" role="status" aria-live="polite">
+        <div className="feed-offline-stamp" aria-hidden="true">
+          <span>FEED</span>
+          <span>UNAVAILABLE</span>
+        </div>
+        <h1>About data is unavailable.</h1>
+        <div className="feed-offline-copy">
+          <p className="feed-offline-code">{copy.code}</p>
+          <p>{copy.summary} {copy.detail}</p>
+        </div>
+        <div className="repo-state-actions">
+          <FeedRetryButton />
         </div>
       </section>
     </main>
