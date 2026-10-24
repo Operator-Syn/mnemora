@@ -297,7 +297,8 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - A row leads with the commit subject and exposes the remaining message on demand. Author, UTC date,
   and a linked short SHA remain visible without opening the full message.
 - The detail page is a ruled list, not a stack of commit cards. Keep its loading, retry, empty, and
-  end-of-index states explicit, and do not imply that a partial collection is complete.
+  end-of-index states explicit, and do not imply that a partial collection is complete. If the feed
+  fails, preserve already-loaded rows, identify a pagination failure locally, and offer a retry.
 
 ### Panels
 
@@ -310,6 +311,25 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
   on a 2.5s loop; `mix-blend-mode: difference` flips its rendered color against each underlying
   language segment so the mark stays visible as it crosses in either theme. Every segment keeps its
   true width, and the pass pauses out of view while the bar is being inspected.
+
+### Feed unavailable
+
+- A failed read is not an empty index. Keep the poster and its three data-bearing surfaces visible:
+  the totals panel says the counts are withheld, the language panel says the distribution is not
+  plotted, and the repository section says its index was not loaded. Never draw a zeroed chart, show
+  `0` as a fallback, or label the collector active when the API did not answer.
+- Lead with the tomato `FEED UNAVAILABLE` stamp and a concise, cause-specific status (`NO RESPONSE`,
+  `NOT CONNECTED`, or `FEED ERROR`). Explain that data is withheld, not that it will arrive on the
+  collector's next scheduled pass. A single `Retry feed` action revalidates the TanStack route loader.
+- Keep raw operator diagnostics out of production loader payloads and visitor copy; only local
+  development may expose the upstream reason. Retry feedback belongs to the active button; the page
+  stays readable, the retry is guarded against duplicate clicks, and a real empty index keeps its
+  existing distinct message.
+- Detail-route failures use the same stamp, plain-language cause, and retry. A later-page commit
+  failure keeps the rows already shown and says they are unchanged.
+- The About page keeps its live store-count panel and the explanatory pipeline when the feed is down;
+  the panel becomes an unavailable state instead of disappearing. A successful empty index remains
+  distinct and may show genuine zero counts.
 
 ### Tooltips
 
@@ -414,6 +434,15 @@ never signals a data refresh.
 16px shadow, and settles to -2.5° with a 5px shadow over 540ms. This remains the page-arrival beat;
 the randomized overprint below is a separate registration flourish, not a response to a changed time
 and never a replay of arrival.
+
+**Outage moment — the misregistered notice.** When the feed is unavailable, a tomato `FEED
+UNAVAILABLE` stamp receives one 760ms cobalt/sunflower registration break and settles; it does not
+loop or impersonate a refresh. The totals, language, and repository modules each keep their place
+and replace their data with a named failure. Retry invalidates the route in the background, changes
+the button to `Checking feed…`, and animates its registration mark only while the request is pending.
+Both sequences run only under `html[data-motion='on']`; motion-off keeps the same copy and controls
+without movement. The continuous panel register is suppressed in the outage state because no live
+collection signal is being reported.
 
 **Supporting motion, each with a job:**
 
