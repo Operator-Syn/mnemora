@@ -2,6 +2,12 @@ import { useRef, useState } from 'react'
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import {
+  FeedRetryButton,
+  FeedSignalMark,
+  feedFailureCopy,
+  normalizeFeedFailureKind,
+} from '../components/FeedFailure'
+import {
   COMMIT_PAGE_SIZE,
   getRepositoryCommitPage,
   getRepositoryDetails,
@@ -22,7 +28,12 @@ export const Route = createFileRoute('/repositories/$owner/$repo')({
     }
 
     const commitPageResult = await getRepositoryCommitPage({ data: { fullName } })
-    if (!commitPageResult.ok) throw new Error(`Repository commits unavailable: ${commitPageResult.kind}`)
+    if (!commitPageResult.ok) {
+      return {
+        ok: false as const,
+        kind: normalizeFeedFailureKind(commitPageResult.kind),
+      }
+    }
 
     return {
       ok: true as const,
@@ -32,6 +43,7 @@ export const Route = createFileRoute('/repositories/$owner/$repo')({
   },
   component: RepositoryDetail,
   notFoundComponent: RepositoryNotFound,
+  errorComponent: () => <ProjectLoadError kind="api" />,
 })
 
 function RepositoryDetail() {
@@ -96,21 +108,26 @@ function collectionMessage(state: string | null): string {
 }
 
 function ProjectLoadError({ kind }: { kind: ReadApiFailure }) {
-  const message =
-    kind === 'config'
-      ? 'Project data is not available right now. Please try again later.'
-      : kind === 'network'
-        ? 'The repository service could not be reached. Please try again shortly.'
-        : 'The repository service returned an error. Please try again shortly.'
+  const copy = feedFailureCopy(normalizeFeedFailureKind(kind))
 
   return (
     <main className="page-wrap repo-page">
-      <section className="repo-state" role="alert">
+      <section className="repo-state repo-state--unavailable" role="status" aria-live="polite">
+        <div className="feed-offline-stamp" aria-hidden="true">
+          <span>FEED</span>
+          <span>UNAVAILABLE</span>
+        </div>
         <h1>Project unavailable</h1>
-        <p>{message}</p>
-        <Link to="/" className="repo-back">
-          All repositories
-        </Link>
+        <div className="feed-offline-copy">
+          <p className="feed-offline-code">{copy.code}</p>
+          <p>{copy.summary} {copy.detail}</p>
+        </div>
+        <div className="repo-state-actions">
+          <FeedRetryButton />
+          <Link to="/" className="repo-back">
+            All repositories
+          </Link>
+        </div>
       </section>
     </main>
   )
@@ -191,9 +208,10 @@ function CommitHistory({
         ))}
       </ol>
       {loadError && (
-        <p className="commit-load-error" role="alert">
-          Older commits could not be loaded. Try again.
-        </p>
+        <div className="commit-load-error" role="alert">
+          <FeedSignalMark />
+          <p>Older commits could not be loaded. The rows shown above are unchanged.</p>
+        </div>
       )}
       {hasMore ? (
         <div className="commit-pagination">
