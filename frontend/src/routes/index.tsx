@@ -15,8 +15,8 @@ const EXIT_MS = 420
 const ENTER_MS = 520
 /** Two registration plates finish at 1.5s; the overlay gets a short 100ms settling tail. */
 const STAMP_OVERPRINT_MS = 1_600
-const STAMP_OVERPRINT_MIN_DELAY_MS = 8_000
-const STAMP_OVERPRINT_MAX_DELAY_MS = 18_000
+const STAMP_OVERPRINT_MIN_DELAY_MS = 5_000
+const STAMP_OVERPRINT_MAX_DELAY_MS = 12_000
 
 type CyclePhase = 'run' | 'draining' | 'exiting' | 'entering'
 
