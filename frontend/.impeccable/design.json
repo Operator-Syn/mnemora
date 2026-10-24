@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-24T12:53:09+08:00",
+  "generatedAt": "2026-10-24T13:57:17+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -231,6 +231,18 @@
         "reducedMotion": "Stopped unless html[data-motion='on']"
       },
       {
+        "name": "feed-outage-register",
+        "value": "760ms steps(1,end), one-shot; cobalt and sunflower plates offset by 80ms",
+        "purpose": "A tomato FEED UNAVAILABLE stamp makes one registration break when the read feed fails, then stays still. It never implies a refresh; only the affected data modules receive unavailable states.",
+        "reducedMotion": "Stopped unless html[data-motion='on']"
+      },
+      {
+        "name": "feed-retry-turn",
+        "value": "900ms steps(8,end), only while the route retry is pending",
+        "purpose": "The retry mark turns only during the real router.invalidate request; the button label changes to Checking feed and returns to Retry feed when the request settles.",
+        "reducedMotion": "Stopped unless html[data-motion='on']"
+      },
+      {
         "name": "pulse-dot",
         "value": "2.4s ease-out infinite",
         "purpose": "Collector status dot."
@@ -444,6 +456,27 @@
       "description": "Skeleton shown while a route loader fetches the index: status line, indeterminate rule, headline and card placeholders. Driven by router.state.isLoading.",
       "html": "<div class=\"ds-pending\"><p class=\"ds-pending-status\">Reading the index</p><div class=\"ds-pending-rail\"><i></i></div><div class=\"ds-pending-card\"><i></i><i></i></div></div>",
       "css": ".ds-pending{display:grid;gap:18px}.ds-pending-status{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}.ds-pending-rail{height:6px;background:color-mix(in srgb,var(--ink) 12%,transparent);overflow:hidden}.ds-pending-rail i{display:block;height:100%;width:34%;background:var(--ink)}.ds-pending-card{border:3px solid var(--ink);background:var(--paper);box-shadow:6px 6px 0 var(--shadow-solid);display:grid;gap:10px;padding:18px 16px}.ds-pending-card i{display:block;height:10px;background:color-mix(in srgb,var(--ink) 12%,var(--paper))}"
+    },
+    {
+      "name": "Feed Unavailable",
+      "kind": "custom",
+      "description": "The single feed-level failure sheet. It replaces successful data with explicit withheld/not-plotted/not-loaded states and offers one route-invalidating retry. Production loader data carries only the failure kind; raw upstream reasons are development-only.",
+      "html": "<div class=\"feed-offline-stamp\" aria-hidden=\"true\">FEED UNAVAILABLE</div><section class=\"feed-offline-banner\" role=\"status\" aria-live=\"polite\"><svg class=\"feed-signal-mark\"></svg><div class=\"feed-offline-copy\"><p class=\"feed-offline-code\">NO RESPONSE</p><p>Data is withheld until the read feed answers.</p></div><button class=\"feed-retry-button\">Retry feed</button></section>",
+      "css": ".feed-offline-stamp{background:var(--tomato);color:var(--on-accent);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--shadow-solid);font-family:var(--font-mono);transform:rotate(-1.5deg)}.feed-offline-banner{display:grid;grid-template-columns:44px minmax(0,1fr) auto;border:var(--rule);background:var(--paper);box-shadow:var(--shadow);padding:16px 18px}.feed-retry-button{background:var(--ink);color:var(--paper);border:2px solid var(--ink);box-shadow:4px 4px 0 var(--shadow-solid)}"
+    },
+    {
+      "name": "Unavailable Data Module",
+      "kind": "custom",
+      "description": "A data-bearing module keeps its frame but replaces metrics or charts with a named unavailable state; never substitute zero or a success-looking empty chart.",
+      "html": "<div class=\"feed-component-failure\" role=\"status\" aria-live=\"polite\"><svg class=\"feed-signal-mark\"></svg><div><p class=\"feed-component-code\">COUNTS WITHHELD</p><h3>Feed unavailable</h3><p class=\"feed-component-detail\">No verified data is available.</p></div></div>",
+      "css": ".feed-component-failure{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center;gap:14px;min-height:112px;padding:14px 0 4px;border-top:var(--rule-2)}.feed-component-code{width:fit-content;margin:0 0 5px;padding:3px 6px;border:1px solid var(--ink);background:var(--tomato);color:var(--on-accent);font-family:var(--font-mono);font-size:11.5px;font-weight:700;letter-spacing:.1em}"
+    },
+    {
+      "name": "Feed Retry Button",
+      "kind": "button",
+      "description": "One scoped retry action revalidates the route loader, disables duplicate clicks while pending, and labels the actual request state.",
+      "html": "<button class=\"feed-retry-button\" type=\"button\" aria-busy=\"false\">Retry feed</button>",
+      "css": ".feed-retry-button{min-height:42px;font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;cursor:var(--cursor-link),pointer}.feed-retry-button:focus-visible{outline:3px solid var(--cobalt);outline-offset:3px}"
     }
   ],
   "narrative": {
@@ -496,6 +529,11 @@
         "name": "The Moved Figure Rule",
         "body": "A number only animates when it changed. Replaying a count over figures the reader just read claims something happened, and a scrambling headline is the browser's own signal for a reload.",
         "section": "motion"
+      },
+      {
+        "name": "The Failed Feed Rule",
+        "body": "A failed read is not an empty index: preserve each data-bearing surface and replace its values with a named unavailable state. Never show zero as fallback, a success-looking chart, or a live collector signal. The About page keeps its explanation and marks its live store panel unavailable; a successful empty index may show true zero counts. One route-invalidating retry is available; the tomato outage notice receives one motion-gated registration break, then stays still.",
+        "section": "components"
       },
       {
         "name": "The Two Papers Rule",
