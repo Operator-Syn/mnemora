@@ -128,7 +128,11 @@ export const getRepositoryIndex = createServerFn({ method: 'GET' }).handler(
     try {
       key = readKey()
     } catch (error) {
-      return { ...empty, kind: 'config', reason: (error as Error).message }
+      return {
+        ...empty,
+        kind: 'config',
+        ...(import.meta.env.DEV ? { reason: (error as Error).message } : {}),
+      }
     }
 
     let res: Response
@@ -139,14 +143,22 @@ export const getRepositoryIndex = createServerFn({ method: 'GET' }).handler(
     } catch (error) {
       // A network failure is reported to the page, not thrown at it: the dashboard should say
       // "the collector is unreachable" rather than render an error boundary.
-      return { ...empty, kind: 'network', reason: `API unreachable: ${(error as Error).message}` }
+      return {
+        ...empty,
+        kind: 'network',
+        ...(import.meta.env.DEV ? { reason: `API unreachable: ${(error as Error).message}` } : {}),
+      }
     }
 
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as
         | { error?: string; reason?: string }
         | null
-      return { ...empty, kind: 'api', reason: body?.reason ?? `API answered ${res.status}` }
+      return {
+        ...empty,
+        kind: 'api',
+        ...(import.meta.env.DEV ? { reason: body?.reason ?? `API answered ${res.status}` } : {}),
+      }
     }
 
     const data = (await res.json()) as RepositoriesResponse
