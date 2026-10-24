@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T22:45:29+08:00",
+  "generatedAt": "2026-10-24T12:53:09+08:00",
   "title": "Design System: Mnemora",
   "extensions": {
     "colorMeta": {
@@ -213,11 +213,23 @@
       },
       {
         "name": "stamp-lift",
-        "value": "5px 5px 0 var(--ink)",
+        "value": "5px 5px 0 var(--shadow-solid)",
         "purpose": "The rotated refresh stamp."
       }
     ],
     "motion": [
+      {
+        "name": "stamp-press",
+        "value": "300ms delay + 540ms cubic-bezier(0.16,1,0.3,1)",
+        "purpose": "One-time page-arrival press for the refresh stamp; separate from the randomized overprint.",
+        "reducedMotion": "Stopped unless html[data-motion='on']"
+      },
+      {
+        "name": "stamp-overprint-plate",
+        "value": "1350ms steps(1,end); second plate offset by 150ms; 1600ms burst; randomized 8–18s idle interval",
+        "purpose": "Cobalt and sunflower outline plates stutter through four registrations behind the stationary tomato stamp while it is visible; they do not imply a data refresh or alter the age. The sequence stops offscreen, in hidden tabs, and unless html[data-motion='on'].",
+        "reducedMotion": "Stopped unless html[data-motion='on']"
+      },
       {
         "name": "pulse-dot",
         "value": "2.4s ease-out infinite",
@@ -234,9 +246,21 @@
         "purpose": "The language stack fading up at full width; never drawn partially filled."
       },
       {
+        "name": "panel-register-pass",
+        "value": "3.6s linear infinite; second panel offset by -1.8s",
+        "purpose": "A heavy tomato rule repeatedly registers across each ledger panel's top ink edge without moving the figures.",
+        "reducedMotion": "Stopped unless html[data-motion='on']"
+      },
+      {
+        "name": "stack-registration-sweep",
+        "value": "2.5s linear infinite",
+        "purpose": "An 8px near-white paper/ink scan source crosses the completed language distribution bar with difference blending, inverting against each underlying segment for a contrasting rendered line in either theme; all segment widths remain truthful, and the pass hides while the chart is inspected.",
+        "reducedMotion": "Stopped unless html[data-motion='on']"
+      },
+      {
         "name": "cycle-progress",
-        "value": "1s linear fill and index mark; 1.4s fixed-tile print stripe",
-        "purpose": "Shows elapsed-hour progress and live collector cadence; the stripe advances exactly one repeat tile per cycle and stops when motion is off."
+        "value": "1s linear fill and index mark; 1.4s fixed-tile print stripe; 520ms tail catch + 420ms sheet exit + 520ms sheet entry at the hour boundary",
+        "purpose": "Shows elapsed-hour progress and live collector cadence; the stripe advances exactly one repeat tile per cycle and stops when motion is off. At the boundary the tail crosses the span the head reached, the sheet wipes out to the right, and the next sheet prints in from the left with the new hour's fill already seated."
       },
       {
         "name": "card-ledger-register",
@@ -364,9 +388,9 @@
       "name": "Cycle Gauge",
       "kind": "progress",
       "refersTo": "cycle",
-      "description": "Square Civic Poster progress gauge. Accessible fill and sunflower index mark follow true wall-clock hour progress with one-second readings; fixed tick marks and a paper track establish the printed-measure look. A narrow stripe pattern travels through cobalt fill by one exact 28px tile per 1.4s cycle, seamless because its start and end background positions are identical. The stripe stops when motion is off.",
-      "html": "<div class=\"cycle\" role=\"progressbar\" aria-label=\"Progress through the current collection hour\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"20\"><i style=\"--progress: 0.2\"></i><b aria-hidden=\"true\"></b></div>",
-      "css": ".cycle{position:relative;height:12px;background:var(--paper);border:2px solid var(--ink);overflow:hidden}.cycle::after{content:\"\";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0 14px,var(--ink) 14px 16px);opacity:.18}.cycle i{position:relative;display:block;height:100%;background:var(--cobalt);transform-origin:left;transform:scaleX(var(--progress,0));overflow:hidden}.cycle i::after{content:\"\";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 12px,color-mix(in srgb,var(--paper) 72%,transparent) 12px 16px,transparent 16px 28px)}.cycle b{position:absolute;z-index:1;top:-1px;bottom:-1px;left:calc(var(--progress,0)*100%);width:6px;background:var(--sun);border-inline:2px solid var(--ink);transform:translateX(-50%)}html[data-motion='on'] .cycle i{transition:transform 1000ms linear}html[data-motion='on'] .cycle i::after{animation:cycle-ink-run 1400ms linear infinite}html[data-motion='on'] .cycle b{transition:left 1000ms linear}html[data-motion='off'] .cycle i::after{animation:none}@keyframes cycle-ink-run{to{background-position:28px 0}}"
+      "description": "Square Civic Poster progress gauge. Accessible fill and sunflower index mark follow true wall-clock hour progress with one-second readings; fixed tick marks and a paper track establish the printed-measure look. A narrow stripe pattern travels through cobalt fill by one exact 28px tile per 1.4s cycle, seamless because its start and end background positions are identical. At the hour boundary the tail crosses the span the head reached, the whole sheet wipes out to the right with the head leaving it, and the next sheet prints in from the left with the stripe already running; the new hour's fill is seated behind the wipe. The stripe stops when motion is off.",
+      "html": "<div class=\"cycle\" data-phase=\"run\" style=\"--progress: 0.2; --drain-from: 1\" role=\"progressbar\" aria-label=\"Progress through the current collection hour\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"20\"><i></i><b aria-hidden=\"true\"></b></div>",
+      "css": ".cycle{position:relative;height:12px;background:var(--paper);border:2px solid var(--ink);overflow:hidden}.cycle::before{content:\"\";position:absolute;z-index:1;inset:0;pointer-events:none;background:var(--paper);transform-origin:left center;transform:scaleX(0)}.cycle::after{content:\"\";position:absolute;z-index:2;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0 14px,var(--ink) 14px 16px);opacity:.18}.cycle i{position:relative;display:block;height:100%;background:var(--cobalt);transform-origin:left;transform:scaleX(var(--progress,0));overflow:hidden}.cycle i::after{content:\"\";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 12px,color-mix(in srgb,var(--paper) 72%,transparent) 12px 16px,transparent 16px 28px)}.cycle b{position:absolute;z-index:3;top:-1px;bottom:-1px;left:calc(var(--progress,0)*100%);width:6px;background:var(--sun);border-inline:2px solid var(--ink);transform:translateX(-50%)}html[data-motion='on'] .cycle i{transition:transform 1000ms linear}html[data-motion='on'] .cycle i::after{animation:cycle-ink-run 1400ms linear infinite}html[data-motion='on'] .cycle b{transition:left 1000ms linear}html[data-motion='on'] .cycle[data-phase='draining']::before,html[data-motion='on'] .cycle[data-phase='exiting']::before{animation:cycle-tail-catch 520ms cubic-bezier(.16,1,.3,1) forwards}html[data-motion='on'] .cycle[data-phase='exiting'] b{animation:cycle-head-exit 420ms cubic-bezier(.16,1,.3,1) forwards}html[data-motion='on'] .cycle[data-phase='exiting']{animation:cycle-print-exit 420ms cubic-bezier(.16,1,.3,1) forwards}html[data-motion='on'] .cycle[data-phase='entering']{animation:cycle-print-enter 520ms cubic-bezier(.16,1,.3,1) forwards}html[data-motion] .cycle[data-phase='draining'] i,html[data-motion] .cycle[data-phase='draining'] b,html[data-motion] .cycle[data-phase='exiting'] i,html[data-motion] .cycle[data-phase='exiting'] b,html[data-motion] .cycle[data-phase='entering'] i,html[data-motion] .cycle[data-phase='entering'] b{transition:none}html[data-motion='off'] .cycle i::after{animation:none}@keyframes cycle-ink-run{to{background-position:28px 0}}@keyframes cycle-tail-catch{from{transform:scaleX(0)}to{transform:scaleX(var(--drain-from,1))}}@keyframes cycle-head-exit{0%,40%{left:calc(var(--drain-from,1)*100%);opacity:1;transform:translateX(-50%)}100%{left:calc(var(--drain-from,1)*100%);opacity:0;transform:translateX(calc(-50% + 6px))}}@keyframes cycle-print-exit{from{clip-path:inset(0 0 0 0)}to{clip-path:inset(0 0 0 100%)}}@keyframes cycle-print-enter{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}"
     },
     {
       "name": "Branded Tooltip",
@@ -387,9 +411,9 @@
     {
       "name": "Refresh Stamp",
       "kind": "custom",
-      "description": "The collection time, tilted like a pasted date slip. Replaced a decorative tape strip.",
+      "description": "The collection time, tilted like a pasted date slip. While visible, two registration plates stutter behind the still-readable tomato face at randomized intervals; the flourish does not imply or alter a refresh. Replaced a decorative tape strip.",
       "html": "<div class=\"ds-stamp\">Refreshed 12 min ago</div>",
-      "css": ".ds-stamp{display:inline-block;transform:rotate(-2.5deg);background:var(--tomato);color:var(--on-accent);border:2px solid var(--ink);font-family:var(--font-mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding:7px 12px;box-shadow:5px 5px 0 var(--ink);white-space:nowrap}"
+      "css": ".ds-stamp{display:inline-block;transform:rotate(-2.5deg);background:var(--tomato);color:var(--on-accent);border:2px solid var(--ink);font-family:var(--font-mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding:7px 12px;box-shadow:5px 5px 0 var(--shadow-solid);white-space:nowrap}"
     },
     {
       "name": "Key/Value Panel",
@@ -501,6 +525,11 @@
       {
         "name": "The Printed Gauge Rule",
         "body": "The cycle gauge uses transform: scaleX() rather than animated width, follows wall-clock elapsed time at one-second readings, and has a one-second linear transition independent of route entrance and exit.",
+        "section": "motion"
+      },
+      {
+        "name": "The Print-Run Rule",
+        "body": "An hour boundary is not a rewind and not an abrupt snap. The fill stays at the value the head actually reached while a paper tail crosses that span from the left; the head holds at the measured edge until the tail arrives. The whole printed sheet then wipes out to the right, the head leaves with it, and the next sheet prints in from the left with the stripe already running. The new hour's fill is painted while the sheet is hidden, with transitions off, so the head never crosses back across the track. A tab that was hidden through the boundary snaps to the new hour instead of pretending it watched the hour end.",
         "section": "motion"
       },
       {
