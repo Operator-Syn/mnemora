@@ -304,6 +304,12 @@ stamp, rotated -2.5deg, and the bar segments in the language stack, which are re
 - **Shape:** square, 3px ink border, `10px 10px 0` ink shadow.
 - **Content:** a mono key/value list with 2px rules between rows, or a stacked bar with a two-column
   legend.
+- **Continuous register:** a heavy tomato stroke repeatedly runs along each panel's top ink rule on
+  a 3.6s loop, with the two panels half a cycle apart. It never crosses or shifts the figures.
+- **Distribution scan:** an 8px near-white paper/ink source passes across the complete language bar
+  on a 2.5s loop; `mix-blend-mode: difference` flips its rendered color against each underlying
+  language segment so the mark stays visible as it crosses in either theme. Every segment keeps its
+  true width, and the pass pauses out of view while the bar is being inspected.
 
 ### Tooltips
 
@@ -401,11 +407,13 @@ against the resting frame in all nine captured frames) and dropped to 19 dB mid-
 ## Motion & Cadence
 
 **Thesis: the press run.** The world is printed, so the motion is printing. Nothing fades softly or
-bounces; things are pressed, registered, and counted, and every one of them reports a real fact.
+bounces; measured motion reports real facts, while the overprint is explicitly material texture and
+never signals a data refresh.
 
 **Focal moment — the stamp press.** On load the refresh stamp arrives from -9° and 1.22 scale with a
-16px shadow, and settles to -2.5° with a 5px shadow over 540ms. It is the one authored entrance; the
-rest of the page is quiet by comparison.
+16px shadow, and settles to -2.5° with a 5px shadow over 540ms. This remains the page-arrival beat;
+the randomized overprint below is a separate registration flourish, not a response to a changed time
+and never a replay of arrival.
 
 **Supporting motion, each with a job:**
 
@@ -418,8 +426,17 @@ rest of the page is quiet by comparison.
   period is constant and never changes on the one-second readings. The stripe stops when motion is
   off, while the real percentage and progressbar value remain. The scale fill still follows actual
   elapsed time and transitions linearly over each second. Both the fill and the countdown are
-  derived from the wall clock, so at the hour boundary the gauge runs back to empty and the count
-  starts again; before that they clamped at 100% and 0 min and stayed there.
+  derived from the wall clock, so at the hour boundary the count turns over; before that they
+  clamped at 100% and 0 min and stayed there. The gauge does not rewind: when the fill reaches the
+  right edge, a paper tail sweeps across the span the head actually reached, the whole printed sheet
+  wipes out to the right with the head leaving it, and the next sheet prints in from the left with
+  the stripe already running. The new hour's fill is re-seated behind the wipe, so the head never
+  travels back.
+- **The ledger panels and distribution bar** — while mounted, a heavy tomato register stroke loops
+  along the two panel top rules on 3.6s cycles, offset by half a cycle; a separate 8px paper/ink scan
+  crosses the complete language bar every 2.5s and uses difference blending to contrast with each
+  segment. These loops never animate stored values or segment widths, are gated by the site Motion
+  setting, and the bar scan hides while its language is being inspected.
 - **Live countdown** — `NEXT PASS IN n MIN` is computed from the current UTC minute rather than
   decremented from the server-rendered value, so it rolls over to 60 at :00 instead of bottoming out
   at zero on a page nobody has reloaded.
@@ -482,6 +499,11 @@ bytes belong to nothing.
   index visibly answers the click.
 - **Ticking stamp** — `Refreshed n min ago` re-renders every 30s. This is the replacement for the
   removed fact ticker: one element that keeps counting, and it counts something true.
+- **Randomized overprint** — while the stamp is visible and Motion is on, two square cobalt and
+  sunflower plates stutter through four offsets behind the stationary tomato stamp, then align
+  (1.35s each, the second 150ms behind). A random 8–18s pause separates bursts; this is print-register
+  texture, not a refresh signal, and the age text never moves or gets occluded. It stops offscreen,
+  while the tab is hidden, or with Motion off.
 
 **The Fill Rule.** Entrance animations use `backwards`, never `both`. A forwards-filling animation
 keeps applying its final transform, and an active animation outranks a transition on the same
@@ -549,8 +571,9 @@ of `isLoading` with no pending match). `RoutePendingVeil` therefore drives the s
 `router.state.isLoading`, which is reliable, and covers the page instead of replacing the outlet so
 the outgoing route keeps its DOM for the view transition.
 
-**The Living Rule.** At least one element must be visibly changing, and it must be reporting something
-true — the cycle gauge, the countdown, the pulse. Motion that reports nothing is noise.
+**The Living Rule.** The page's live signals report something true — the cycle gauge and countdown.
+The randomized overprint is separate material texture: it changes no value and never implies a new
+collection. Motion that impersonates a data update is noise.
 
 **The Wall Clock Rule.** Every reading of the collector is a function of `Date.now()`, never of how
 long this tab has been open. A page left alone for an hour used to sit at "Next pass in 0 min" and
@@ -591,7 +614,16 @@ one-second linear transform transition, so the fill stays continuous without rep
 The running stripe uses a fixed 28px repeating-linear-gradient tile and moves by exactly 28px per
 cycle; never vary its duration from React state, because changing animation-duration restarts the
 loop and exposes the seam. Keep the track rectangular and use only the established paper, ink,
-cobalt, sunflower, and tomato palette.
+cobalt, sunflower, and tomato palette. The tail sweep and the sheet reprint are transforms and
+clip-path wipes on the track, never a width animation on the fill.
+
+**The Print-Run Rule.** An hour boundary is not a rewind and not an abrupt snap. The fill stays at
+the value the head actually reached while a paper tail crosses that span from the left; the head
+holds at the measured edge until the tail arrives. The whole printed sheet then wipes out to the
+right, the head leaves with it, and the next sheet prints in from the left with the stripe already
+running. The new hour's fill is painted while the sheet is hidden, with transitions off, so the head
+never crosses back across the track. A tab that was hidden through the boundary snaps to the new
+hour instead of pretending it watched the hour end.
 
 ## Do's and Don'ts
 
