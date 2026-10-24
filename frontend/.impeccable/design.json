@@ -226,7 +226,7 @@
       },
       {
         "name": "stamp-overprint-plate",
-        "value": "1350ms steps(1,end); second plate offset by 150ms; 1600ms burst; randomized 8–18s idle interval",
+        "value": "1350ms steps(1,end); second plate offset by 150ms; 1600ms burst; randomized 5–12s idle interval",
         "purpose": "Cobalt and sunflower outline plates stutter through four registrations behind the stationary tomato stamp while it is visible; they do not imply a data refresh or alter the age. The sequence stops offscreen, in hidden tabs, and unless html[data-motion='on'].",
         "reducedMotion": "Stopped unless html[data-motion='on']"
       },
