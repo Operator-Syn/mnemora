@@ -1,4 +1,4 @@
-import { HeadContent, Link, Scripts, createRootRoute } from '@tanstack/react-router'
+import { HeadContent, Link, ScriptOnce, Scripts, createRootRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
@@ -93,10 +93,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: runs before first paint so the stored theme applies without a flash; a module script would paint the wrong theme first. */}
-      <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the motion mode has to be on <html> before first paint, or the page moves once and then stops. */}
-        <script dangerouslySetInnerHTML={{ __html: MOTION_INIT_SCRIPT }} />
+        {/* ScriptOnce emits these only during SSR and removes each tag as the parser reaches it,
+            so the theme and motion mode are on <html> before first paint without leaving a
+            client-rendered <script> for React to warn about. */}
+        <ScriptOnce>{THEME_INIT_SCRIPT}</ScriptOnce>
+        <ScriptOnce>{MOTION_INIT_SCRIPT}</ScriptOnce>
         <HeadContent />
       </head>
       <body className="font-sans antialiased [overflow-wrap:anywhere] selection:bg-[rgba(79,184,178,0.24)]">
