@@ -20,6 +20,7 @@ policy in a stack's file.
 | `frontend/` | the TanStack Start app: package, Wrangler/Vite config, design and product docs, generated TanStack skills | [`frontend/AGENTS.md`](frontend/AGENTS.md) |
 | `.githooks/` | the commit guard that makes every commit single-file | this file, `README.md` |
 | `.codex/`, `.claude/`, `scripts/hooks/` | agent hook registration and the dispatcher that scopes it | [Agent hooks](#agent-hooks) |
+| `.agents/skills/impeccable/`, `.claude/skills/impeccable/`, `.claude/agents/` | project-pinned Impeccable distributions and Claude subagents | this file |
 | `biome.json` | lint rules for JavaScript/TypeScript/JSON/CSS across the whole repository | this file |
 
 A stack's dependencies, runtime configuration, generated files and design documents stay inside that
@@ -39,6 +40,11 @@ the root would not make them easier to find; it would make the app stop being a 
 - **Generated files are generated.** `frontend/src/routeTree.gen.ts`, `frontend/worker-configuration.d.ts`
   and `frontend/.agents/skills/` are produced by their tools and excluded from lint. Never hand-edit
   them; regenerate instead.
+- **Impeccable distributions are generated.** `.agents/skills/impeccable/` and
+  `.claude/skills/impeccable/` are the repository-pinned Codex and Claude distributions; their bundled
+  references are platform-specific. `.claude/agents/impeccable-*.md` supplies the Claude subagents.
+  Update these through the Impeccable installer, not by hand; the skill bundles are excluded from
+  Biome so the commit hook does not rewrite third-party generated files.
 - **Documents stay beside what they describe.** Repository-wide claims and the ownership rules live
   in this file and `docs/`. Stack behaviour lives in that stack's `README.md`, `AGENTS.md` and design
   documents.
@@ -59,12 +65,13 @@ started in that directory, and ignored from anywhere else. That inconsistency is
 repository has already been bitten by it: `~/.codex/config.toml` still carries trust entries for
 `frontend/.codex/hooks.json`, which no longer exists. One root registration removes the question.
 
-Both root registrations point at `scripts/hooks/intent-dispatch.mjs`, which decides whether the event
-concerns the frontend and only then runs `frontend/.intent/hooks/intent-*.gate.mjs`. Frontend guidance
-therefore does not arrive in a workflow, migration or nginx session, and an edit outside `frontend/`
-cannot be denied by the TanStack gate. A session rooted outside `frontend/` gets a one-line pointer
-instead of the catalog, so a frontend edit is never denied in a session that was never offered the
-skills.
+Both root registrations use `scripts/hooks/intent-dispatch.mjs` for the Intent gate, which decides
+whether the event concerns the frontend and only then runs
+`frontend/.intent/hooks/intent-*.gate.mjs`. Codex also calls the Impeccable detector after edits and on
+Stop; its repo-pinned skill bundle is separate from the Intent gate. Frontend guidance therefore does
+not arrive in a workflow, migration or nginx session, and an edit outside `frontend/` cannot be denied
+by the TanStack gate. A session rooted outside `frontend/` gets a one-line pointer instead of the
+catalog, so a frontend edit is never denied in a session that was never offered the skills.
 
 ### Checking hook state
 
