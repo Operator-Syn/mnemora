@@ -4,6 +4,13 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
 import type { Repository } from '../lib/mnemora'
 import { markBackgroundRefreshEnd, markBackgroundRefreshStart } from '../components/RoutePendingVeil'
+import {
+  FeedComponentFailure,
+  FeedRetryButton,
+  FeedSignalMark,
+  feedFailureCopy,
+  type FeedFailureKind,
+} from '../components/FeedFailure'
 
 const HOUR_MS = 3_600_000
 
@@ -25,6 +32,7 @@ export const Route = createFileRoute('/')({
   // function is an RPC). The key stays on the server either way.
   loader: () => getRepositoryIndex(),
   component: Home,
+  errorComponent: () => <DashboardUnavailable kind="api" />,
 })
 
 /**
@@ -440,6 +448,10 @@ function Home() {
   const cycle = useCollectorClock(data.nextPassInMinutes)
   useHourlyRefresh(data.refreshedAt, cycle.hour, cycle.visible)
 
+  if (!data.ok) {
+    return <DashboardUnavailable kind={data.kind} reason={data.reason} />
+  }
+
   return (
     <main>
       <div className="page-wrap">
@@ -455,11 +467,6 @@ function Home() {
           )}
 
           <h1>
-            {!data.ok && (
-              <>
-                <span className="hl">Repository</span> data is unavailable.
-              </>
-            )}
             {isEmpty && (
               <>
                 <span className="hl">No</span> public repositories yet.
@@ -522,20 +529,6 @@ function Home() {
             </>
           )}
 
-          {!data.ok && (
-            <div className="state" role="status">
-              <p>The feed isn&rsquo;t answering this minute.</p>
-              <p>
-                The collector runs hourly on its own, so this fills in without anyone touching it.
-                Reload in a minute or two.
-              </p>
-              {import.meta.env.DEV && (
-                <p className="diag">
-                  dev only &middot; {data.kind ?? 'unknown'} &middot; {data.reason}
-                </p>
-              )}
-            </div>
-          )}
 
           {isEmpty && (
             <div className="state">
@@ -763,6 +756,89 @@ function Home() {
               </section>
             </>
           )}
+        </section>
+      </div>
+    </main>
+  )
+}
+
+function DashboardUnavailable({
+  kind,
+  reason,
+}: {
+  kind: FeedFailureKind | undefined
+  reason?: string
+}) {
+  const copy = feedFailureCopy(kind)
+
+  return (
+    <main>
+      <div className="page-wrap">
+        <section className="poster feed-unavailable" data-feed-state="unavailable">
+          <div className="feed-offline-stamp" aria-hidden="true">
+            <span>FEED</span>
+            <span>UNAVAILABLE</span>
+          </div>
+
+          <h1>
+            <span className="hl alt">Repository</span> data is unavailable.
+          </h1>
+          <p className="lede">{copy.summary}</p>
+
+          <div className="feed-offline-banner" role="status" aria-live="polite">
+            <FeedSignalMark />
+            <div className="feed-offline-copy">
+              <p className="feed-offline-code">{copy.code}</p>
+              <p>{copy.detail}</p>
+            </div>
+            <FeedRetryButton />
+          </div>
+
+          {import.meta.env.DEV && reason && (
+            <p className="feed-diagnostic">
+              dev only &middot; {kind ?? 'unknown'} &middot; {reason}
+            </p>
+          )}
+
+          <div className="brow" data-reveal>
+            <span>01</span> The ledger
+          </div>
+
+          <div className="poster-grid" data-feed-state="unavailable">
+            <section className="panel" aria-labelledby="feed-metrics-heading">
+              <h2 id="feed-metrics-heading">By the numbers</h2>
+              <FeedComponentFailure
+                code="TOTALS WITHHELD"
+                headline="No verified counts"
+                detail="Repository and commit totals are not shown without a current response."
+              />
+            </section>
+
+            <section className="panel" aria-labelledby="feed-language-heading">
+              <h2 id="feed-language-heading">Language mix / bytes</h2>
+              <FeedComponentFailure
+                code="MIX NOT PLOTTED"
+                headline="Distribution unavailable"
+                detail="Language shares need the indexed byte totals; no empty chart is implied."
+              />
+            </section>
+          </div>
+
+          <div className="brow" data-reveal>
+            <span>02</span> Public repositories
+          </div>
+
+          <section className="repos feed-repositories" aria-labelledby="feed-repositories-heading">
+            <div className="repos-head">
+              <h2 id="feed-repositories-heading">Public repositories</h2>
+              <span className="repos-note">INDEX NOT LOADED</span>
+            </div>
+            <FeedComponentFailure
+              code="INDEX NOT LOADED"
+              headline="Repository cards withheld"
+              detail="The public repository listing could not be retrieved."
+            />
+          </section>
         </section>
       </div>
     </main>
