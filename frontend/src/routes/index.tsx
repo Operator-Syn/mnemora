@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { getRepositoryIndex } from '../lib/mnemora'
@@ -6,6 +6,19 @@ import type { Repository } from '../lib/mnemora'
 import { markBackgroundRefreshEnd, markBackgroundRefreshStart } from '../components/RoutePendingVeil'
 
 const HOUR_MS = 3_600_000
+
+/** The tail crosses the span the head reached before the sheet leaves. */
+const DRAIN_MS = 520
+/** The printed sheet wipes out to the right; the head leaves with it. */
+const EXIT_MS = 420
+/** The next sheet prints in from the left with the stripe already running. */
+const ENTER_MS = 520
+/** Two registration plates finish at 1.5s; the overlay gets a short 100ms settling tail. */
+const STAMP_OVERPRINT_MS = 1_600
+const STAMP_OVERPRINT_MIN_DELAY_MS = 8_000
+const STAMP_OVERPRINT_MAX_DELAY_MS = 18_000
+
+type CyclePhase = 'run' | 'draining' | 'exiting' | 'entering'
 
 export const Route = createFileRoute('/')({
   // Runs in the Worker on every request (and again on client navigations, where the server
@@ -165,9 +178,15 @@ function useCollectorClock(initialMinutes: number): {
   progress: number
   hour: number | null
   visible: boolean
+  phase: CyclePhase
+  drainFrom: number
 } {
   const [now, setNow] = useState<number | null>(null)
   const [visible, setVisible] = useState(true)
+  const [phase, setPhase] = useState<CyclePhase>('run')
+  const [drainFrom, setDrainFrom] = useState(1)
+  const hourRef = useRef<number | null>(null)
+  const lastProgressRef = useRef(1)
 
   useEffect(() => {
     let timer = 0
@@ -199,23 +218,83 @@ function useCollectorClock(initialMinutes: number): {
     }
   }, [])
 
-  // Server render and first paint use the snapshot the loader took, so the markup matches it.
-  if (now === null) {
-    return {
-      minutesLeft: initialMinutes,
-      progress: (60 - initialMinutes) / 60,
-      hour: null,
-      visible,
-    }
-  }
-
-  const date = new Date(now)
-  const minutesLeft = 60 - date.getUTCMinutes()
+  const date = now === null ? null : new Date(now)
+  const hour = now === null ? null : Math.floor(now / HOUR_MS)
   const progress =
-    (date.getUTCMinutes() * 60_000 + date.getUTCSeconds() * 1000 + date.getUTCMilliseconds()) /
-    HOUR_MS
+    date === null
+      ? (60 - initialMinutes) / 60
+      : (date.getUTCMinutes() * 60_000 +
+          date.getUTCSeconds() * 1000 +
+          date.getUTCMilliseconds()) /
+        HOUR_MS
+  const motionOn =
+    typeof document !== 'undefined' && document.documentElement.dataset.motion === 'on'
+  const hourChanged = hour !== null && hourRef.current !== null && hour !== hourRef.current
+  /**
+   * The first render of a new hour must already show the old fill at its end: the effect below runs
+   * after paint, so without this the bar would put one frame of the new near-zero progress on
+   * screen and the head would visibly travel back before the tail catch-up started.
+   */
+  const canDrain = hourChanged && motionOn && lastProgressRef.current >= 0.9 && progress < 0.02
 
-  return { minutesLeft, progress, hour: Math.floor(now / HOUR_MS), visible }
+  /**
+   * The hour turning over is the one moment the gauge must not rewind. The fill is already at the
+   * right edge, so the tail sweeps up to it, the whole sheet wipes out, and the next sheet prints
+   * in from the left. `drainFrom` is the value the head actually reached, not an assumed 100%, so a
+   * tab that was hidden through the boundary does not fake a full hour.
+   */
+  useEffect(() => {
+    if (hour === null) return
+
+    if (hourRef.current === null) {
+      hourRef.current = hour
+      lastProgressRef.current = progress
+      return
+    }
+
+    if (hour === hourRef.current) {
+      if (phase === 'run') lastProgressRef.current = progress
+      return
+    }
+
+    hourRef.current = hour
+
+    if (!canDrain) {
+      lastProgressRef.current = progress
+      setPhase('run')
+      return
+    }
+
+    setDrainFrom(lastProgressRef.current)
+    setPhase('draining')
+  }, [canDrain, hour, phase, progress])
+
+  useEffect(() => {
+    if (phase === 'draining') {
+      const timer = window.setTimeout(() => setPhase('exiting'), DRAIN_MS)
+      return () => window.clearTimeout(timer)
+    }
+    if (phase === 'exiting') {
+      const timer = window.setTimeout(() => setPhase('entering'), EXIT_MS)
+      return () => window.clearTimeout(timer)
+    }
+    if (phase === 'entering') {
+      const timer = window.setTimeout(() => setPhase('run'), ENTER_MS)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [phase])
+
+  // Server render and first paint use the snapshot the loader took, so the markup matches it.
+  const minutesLeft = date === null ? initialMinutes : 60 - date.getUTCMinutes()
+  const visualProgress =
+    phase === 'draining' || phase === 'exiting'
+      ? drainFrom
+      : phase === 'entering' || !canDrain
+        ? progress
+        : lastProgressRef.current
+
+  return { minutesLeft, progress: visualProgress, hour, visible, phase, drainFrom }
 }
 
 /**
@@ -271,6 +350,69 @@ function Home() {
   /** Which slice of the language mix the pointer is on; drives the cross-highlight. */
   const [focusedLanguage, setFocusedLanguage] = useState<string | null>(null)
   const refreshedAgo = useTickingAgo(data.refreshedAt)
+  const stampRef = useRef<HTMLDivElement | null>(null)
+  const nextStampOverprintId = useRef(0)
+  const [stampInView, setStampInView] = useState(false)
+  const [stampOverprintId, setStampOverprintId] = useState<number | null>(null)
+  useEffect(() => {
+    if (!data.ok) {
+      setStampInView(false)
+      return
+    }
+    const stamp = stampRef.current
+    if (!stamp) return
+    const observer = new IntersectionObserver(([entry]) => {
+      setStampInView(entry.isIntersecting)
+      if (!entry.isIntersecting) setStampOverprintId(null)
+    })
+    observer.observe(stamp)
+    return () => observer.disconnect()
+  }, [data.ok])
+  const stampEligible = data.ok && stampInView
+  useEffect(() => {
+    if (!stampEligible) return
+    let timer: number | undefined
+    let stopped = false
+    const schedule = () => {
+      if (stopped || document.visibilityState !== 'visible') return
+      const delay =
+        STAMP_OVERPRINT_MIN_DELAY_MS +
+        Math.random() * (STAMP_OVERPRINT_MAX_DELAY_MS - STAMP_OVERPRINT_MIN_DELAY_MS)
+      timer = window.setTimeout(() => {
+        timer = undefined
+        if (stopped) return
+        if (
+          document.visibilityState !== 'visible' ||
+          document.documentElement.dataset.motion !== 'on'
+        ) {
+          schedule()
+          return
+        }
+        nextStampOverprintId.current += 1
+        setStampOverprintId(nextStampOverprintId.current)
+        timer = window.setTimeout(() => {
+          setStampOverprintId(null)
+          schedule()
+        }, STAMP_OVERPRINT_MS)
+      }, delay)
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (timer !== undefined) window.clearTimeout(timer)
+        timer = undefined
+        setStampOverprintId(null)
+      } else {
+        schedule()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    schedule()
+    return () => {
+      stopped = true
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [stampEligible])
   const languages = useMemo(() => {
     const counts = new Map<string, number>()
     for (const repo of byCommits) {
@@ -303,9 +445,12 @@ function Home() {
       <div className="page-wrap">
         <section className="poster">
           {data.ok && (
-            <div className="stamp">
+            <div className="stamp" ref={stampRef}>
               Refreshed{' '}
               <time dateTime={data.refreshedAt ?? undefined}>{refreshedAgo}</time>
+              {stampOverprintId !== null && (
+                <span key={stampOverprintId} className="stamp-overprint" aria-hidden="true" />
+              )}
             </div>
           )}
 
@@ -358,13 +503,20 @@ function Home() {
               </div>
               <div
                 className="cycle"
+                data-phase={cycle.phase}
+                style={
+                  {
+                    '--progress': cycle.progress,
+                    '--drain-from': cycle.drainFrom,
+                  } as CSSProperties
+                }
                 role="progressbar"
                 aria-label="Progress through the current collection hour"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(cycle.progress * 100)}
               >
-                <i style={{ '--progress': cycle.progress } as CSSProperties} />
+                <i />
                 <b aria-hidden="true" />
               </div>
             </>
@@ -426,6 +578,7 @@ function Home() {
                 <div className="panel">
                   <h2>Language mix / bytes</h2>
                   <div className="stack stack-live" data-focus={focusedLanguage ? '' : undefined}>
+                    <span className="stack-scan" aria-hidden="true" />
                     {data.languages.map((entry, index) => (
                       // biome-ignore lint/a11y/noStaticElementInteractions: pointer-only cross-highlight; the share is written in the legend and in the title.
                       <i
