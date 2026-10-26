@@ -97,9 +97,12 @@ case "${1:-}" in
       rendered=$(mktemp)
       python3 scripts/workflow_files.py build "$(dirname "$f")" --out "$rendered" \
         --credentials "$cred_map" >/dev/null
-      docker compose cp "$rendered" "n8n:/tmp/wf.json" >/dev/null < /dev/null
+      # Stream in over stdin rather than `docker compose cp`: cp preserves the host uid on the
+      # copied file, so the second import finds /tmp/wf.json owned by someone else and dies with
+      # EACCES. A redirection inside the container keeps the file owned by n8n's own user.
+      docker compose exec -T n8n sh -c 'cat > /tmp/wf-import.json' < "$rendered"
       rm -f "$rendered"
-      docker compose exec -T n8n n8n import:workflow --input=/tmp/wf.json < /dev/null | tail -1
+      docker compose exec -T n8n n8n import:workflow --input=/tmp/wf-import.json < /dev/null | tail -1
     done < <(workflow_files)
     rm -f "$cred_map"
     [ "$found" = 1 ] || { echo "no workflows/*/workflow.json found"; exit 1; }
