@@ -75,10 +75,15 @@ npx wrangler secret put MNEMORA_READ_KEY
 only serves `GET /webhook/api/*` (`../infra/nginx/mnemora-api.conf`). Moving the API moves that one
 value, not the code.
 
-Pushes to `main` that touch `frontend/**` deploy through `.github/workflows/frontend-worker.yml`,
-which needs the repository secret `CLOUDFLARE_API_TOKEN` (and the `CLOUDFLARE_ACCOUNT_ID` variable).
-Without the secret the verify job still passes and the deploy step fails, so a green lint run is not
-evidence that the site changed.
+Pushes to `main` that touch `frontend/**` run `.github/workflows/frontend-worker.yml`. It needs the
+repository secret `CLOUDFLARE_API_TOKEN` (and the `CLOUDFLARE_ACCOUNT_ID` variable) to deploy. While
+that secret is unset the workflow verifies lint, routes, types and build, then **skips the deploy and
+says so in a warning annotation** — a green run then means "the build is sound", not "the site
+changed". Deploy by hand until the token exists:
+
+```sh
+cd frontend && npx wrangler deploy
+```
 
 ## Layout
 
