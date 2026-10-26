@@ -20,6 +20,11 @@ So the manifest holds a marker and the code lives beside it:
 n8n receives is always generated from the files a maintainer edits — there is no second copy to
 drift.
 
+`--credentials <tsv>` resolves credential ids against the instance being imported into. A credential
+id belongs to one n8n database; the name is the only identifier that survives an export. Without the
+remap, `import:workflow` writes the exporting instance's id into the node, and the node then fails at
+run time with `No authentication data defined on node` while the workflow itself looks intact.
+
 Only the two parameter names that hold code are split: `jsCode` and `query`. Everything else in the
 manifest stays inline, because a short expression is more readable where it is used.
 """
@@ -84,14 +89,57 @@ def markers_in(value):
     return False
 
 
+def load_credential_map(path):
+    """name -> id, from the target instance (`select name, id from credentials_entity`)."""
+    mapping = {}
+    for line in Path(path).read_text().splitlines():
+        if not line.strip():
+            continue
+        name, _, cred_id = line.partition("\t")
+        if name and cred_id:
+            mapping[name] = cred_id
+    return mapping
+
+
+def remap_credentials(wf: dict, mapping: dict, source: str) -> int:
+    """Point every credential slot at this instance's id for that credential's name."""
+    changed = 0
+    warnings = []
+    for node in wf.get("nodes", []):
+        for cred_type, slot in (node.get("credentials") or {}).items():
+            name = slot.get("name")
+            if not name:
+                warnings.append(f"{source}: node '{node.get('name')}' has a {cred_type} credential "
+                                "slot with no name — it cannot be resolved by name")
+                continue
+            target = mapping.get(name)
+            if target is None:
+                warnings.append(f"{source}: node '{node.get('name')}' references credential "
+                                f"'{name}' ({cred_type}), which does not exist on this instance")
+                continue
+            if slot.get("id") != target:
+                slot["id"] = target
+                changed += 1
+    for warning in warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    return changed
+
+
 def cmd_build(args):
+    mapping = load_credential_map(args.credentials) if args.credentials else {}
     dirs = workflow_dirs(args.target)
     rendered = {}
     for d in dirs:
         wf_path = d / "workflow.json"
         if not wf_path.exists():
             continue
-        rendered[d.name] = load_expanded(wf_path)
+        wf = load_expanded(wf_path)
+        if mapping:
+            changed = remap_credentials(wf, mapping, d.name)
+            if changed:
+                print(f"{d.name}: {changed} credential reference(s) remapped to this instance",
+                      file=sys.stderr)
+        rendered[d.name] = wf
 
     if args.out:
         if len(rendered) != 1:
@@ -146,6 +194,11 @@ def main():
     b = sub.add_parser("build", help="render markers into JSON")
     b.add_argument("target", nargs="?")
     b.add_argument("--out")
+    b.add_argument(
+        "--credentials",
+        metavar="TSV",
+        help="credential name<TAB>id for the target instance; resolves ids by name",
+    )
     b.set_defaults(func=cmd_build)
 
     s = sub.add_parser("split", help="extract code/SQL strings into files")
