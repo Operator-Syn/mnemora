@@ -83,16 +83,25 @@ case "${1:-}" in
     # stops firing and a webhook starts answering 404. Record what is armed now, so the aftermath
     # can be named instead of discovered the next time something fails to run.
     armed_before=$(psql_db "select id from workflow_entity where active and \"activeVersionId\" is not null order by id;")
+    # A credential id belongs to one n8n database. Importing the checked-in JSON verbatim writes the
+    # exporting instance's ids into the nodes, and every one of them then fails at run time with
+    # 'No authentication data defined on node' — a published, active workflow that cannot
+    # authenticate. Resolve them by name (the only portable identifier) so the manifest stays
+    # instance-neutral and the import is correct wherever it lands.
+    cred_map=$(mktemp)
+    psql_db "select name || E'\t' || id from credentials_entity order by name;" > "$cred_map"
     while IFS= read -r f; do
       found=1
       echo "-> $(dirname "$f")"
       # Code and SQL live in files beside the manifest; render them into JSON for n8n.
       rendered=$(mktemp)
-      python3 scripts/workflow_files.py build "$(dirname "$f")" --out "$rendered" >/dev/null
+      python3 scripts/workflow_files.py build "$(dirname "$f")" --out "$rendered" \
+        --credentials "$cred_map" >/dev/null
       docker compose cp "$rendered" "n8n:/tmp/wf.json" >/dev/null < /dev/null
       rm -f "$rendered"
       docker compose exec -T n8n n8n import:workflow --input=/tmp/wf.json < /dev/null | tail -1
     done < <(workflow_files)
+    rm -f "$cred_map"
     [ "$found" = 1 ] || { echo "no workflows/*/workflow.json found"; exit 1; }
     # Import upserts by id; a rising count means a file lost its id.
     echo "workflows in database: $(psql_db 'select count(*) from workflow_entity;')"
