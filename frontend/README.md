@@ -70,9 +70,15 @@ npx wrangler secret put MNEMORA_READ_KEY
 ```
 
 `wrangler.jsonc` holds the non-secret configuration: the Worker name, `compatibility_date`, and
-`nodejs_compat` (needed for `process.env`). Add `MNEMORA_API_URL` there under `vars` for production —
-it points at the public origin nginx exposes, which only serves `GET /webhook/api/*`
-(`../infra/nginx/mnemora-api.conf`).
+`nodejs_compat` (needed for `process.env`). `MNEMORA_API_URL` is committed there under `vars` as
+`https://mnemora-api.syn-forge.com/webhook/api` — the public origin nginx exposes on the VPS, which
+only serves `GET /webhook/api/*` (`../infra/nginx/mnemora-api.conf`). Moving the API moves that one
+value, not the code.
+
+Pushes to `main` that touch `frontend/**` deploy through `.github/workflows/frontend-worker.yml`,
+which needs the repository secret `CLOUDFLARE_API_TOKEN` (and the `CLOUDFLARE_ACCOUNT_ID` variable).
+Without the secret the verify job still passes and the deploy step fails, so a green lint run is not
+evidence that the site changed.
 
 ## Layout
 
