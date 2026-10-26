@@ -19,7 +19,7 @@
 	"observability": {
 		"enabled": true
 	},
-	"upload_source_maps": true
+	"upload_source_maps": true,
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -38,12 +38,15 @@
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 *
 	 * MNEMORA_API_URL is not secret: it is the public origin nginx exposes on the VPS, which
-	 * serves only GET /webhook/api/* (see ../infra/nginx/mnemora-api.conf). Set it here at deploy
-	 * time; locally `vite dev` reads .dev.vars instead, where it points at 127.0.0.1:5680.
+	 * serves only GET /webhook/api/* (see ../infra/nginx/mnemora-api.conf). It is committed here
+	 * rather than set with `wrangler secret put` so the deployed Worker cannot drift from the
+	 * repository; locally `vite dev` reads .dev.vars instead, where it points at 127.0.0.1:5680.
 	 *
 	 * MNEMORA_READ_KEY must NEVER appear here — use `wrangler secret put MNEMORA_READ_KEY`.
 	 */
-	// "vars": { "MNEMORA_API_URL": "https://mnemora.example.org/webhook/api" }
+	"vars": {
+		"MNEMORA_API_URL": "https://mnemora-api.syn-forge.com/webhook/api"
+	}
 	/**
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/
