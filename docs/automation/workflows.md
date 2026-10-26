@@ -342,6 +342,19 @@ result with Biome, and maps line numbers back. It fails on **warnings** as well 
 ./scripts/check-js-lint.py --fix --unsafe   # apply fixes, unwrapping the body back into the file
 ```
 
+It looks for Biome on `PATH` and does not fetch one. A checkout that builds the frontend already has
+the pinned version in `frontend/node_modules/.bin`. A host that only imports workflows — the n8n VPS —
+installs the same version as an ordinary npm package into the user's own prefix, so the gate is a real
+dependency instead of an `npx` shim that downloads on every call and pins nothing:
+
+```sh
+npm install --global --prefix "$HOME/.local" @biomejs/biome@2.4.15   # match frontend/package.json
+```
+
+`~/.local/bin` is on a login shell's `PATH`, not on the minimal `PATH` of `ssh host 'command'`, so run
+the gate from `bash -lc` when driving it remotely — otherwise it reports "biome not found" and refuses
+the import.
+
 `biome.json` declares the n8n globals (`$input`, `$json`, `$`, `$execution`, `$env`, …) so they are
 not reported as undeclared, and leaves the formatter off: formatting these files is a separate
 decision from linting them.
